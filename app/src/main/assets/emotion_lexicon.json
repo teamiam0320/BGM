@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "note": "온디바이스 감정·테마 분석용 어휘 사전. 서버 버전은 ami 백엔드의 임베딩 분류기로 교체하되 같은 테마 축(ThemeVector 계약)을 유지한다.",
+  "themes": [
+    {"id": "work_stress", "label": "업무 스트레스", "mood": "tired", "keywords": ["회사", "업무", "일이", "야근", "상사", "팀장", "회의", "보고", "기획안", "반려", "마감", "프로젝트", "실적", "출근", "퇴근"]},
+    {"id": "fatigue", "label": "피로", "mood": "tired", "keywords": ["피곤", "지쳤", "지친", "지쳐", "힘들", "녹초", "졸려", "버텼", "버틴", "기운", "번아웃"]},
+    {"id": "sadness", "label": "슬픔", "mood": "sad", "keywords": ["슬프", "슬퍼", "우울", "눈물", "울었", "속상", "허무", "공허", "서운"]},
+    {"id": "anxiety", "label": "불안", "mood": "anxious", "keywords": ["불안", "걱정", "초조", "긴장", "두려", "무서", "막막", "어떡하"]},
+    {"id": "anger", "label": "분노", "mood": "angry", "keywords": ["화나", "화가", "짜증", "열받", "억울", "답답", "빡치"]},
+    {"id": "loneliness", "label": "외로움", "mood": "lonely", "keywords": ["외로", "혼자", "쓸쓸", "아무도", "보고싶", "그리워"]},
+    {"id": "self_doubt", "label": "자기 의심", "mood": "sad", "keywords": ["부족", "못난", "자신없", "자신이 없", "내 탓", "내탓", "실수", "못하", "한심", "자책"]},
+    {"id": "relationship", "label": "관계", "mood": "anxious", "keywords": ["친구", "가족", "엄마", "아빠", "동료", "연인", "남자친구", "여자친구", "싸웠", "다퉜"]},
+    {"id": "gratitude", "label": "감사", "mood": "calm", "keywords": ["고마", "감사", "덕분", "다행"]},
+    {"id": "joy", "label": "기쁨", "mood": "happy", "keywords": ["좋았", "기뻤", "기뻐", "행복", "신나", "웃었", "칭찬", "뿌듯", "성공", "합격"]},
+    {"id": "calm", "label": "평온", "mood": "calm", "keywords": ["편안", "평온", "여유", "괜찮", "차분", "느긋", "쉬고"]},
+    {"id": "excitement", "label": "설렘", "mood": "excited", "keywords": ["설레", "기대", "여행", "주말", "데이트", "휴가"]}
+  ],
+  "moods": [
+    {"id": "tired", "label": "지침", "weather": "흐림", "colorHex": "#7A8BA8", "valence": -0.5},
+    {"id": "sad", "label": "울적함", "weather": "비", "colorHex": "#4F6FB0", "valence": -0.7},
+    {"id": "anxious", "label": "불안함", "weather": "안개", "colorHex": "#8F86B8", "valence": -0.5},
+    {"id": "angry", "label": "답답함", "weather": "천둥", "colorHex": "#C0675A", "valence": -0.6},
+    {"id": "lonely", "label": "쓸쓸함", "weather": "눈", "colorHex": "#9FB4C7", "valence": -0.4},
+    {"id": "neutral", "label": "담담함", "weather": "구름 조금", "colorHex": "#A9B2A0", "valence": 0.0},
+    {"id": "calm", "label": "평온함", "weather": "맑음", "colorHex": "#6FAF9A", "valence": 0.4},
+    {"id": "happy", "label": "기쁨", "weather": "햇살", "colorHex": "#E8B44C", "valence": 0.8},
+    {"id": "excited", "label": "설렘", "weather": "무지개", "colorHex": "#E3879E", "valence": 0.7}
+  ]
+}

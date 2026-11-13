@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.BGM" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/bgm_ink</item>
+        <item name="android:statusBarColor">@color/bgm_ink</item>
+        <item name="android:navigationBarColor">@color/bgm_ink</item>
+    </style>
+    <color name="bgm_ink">#0E1320</color>
+    <color name="bgm_accent">#8FB7FF</color>
+</resources>

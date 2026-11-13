@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "note": "데모 음원은 tools/generate_tracks.py로 직접 합성한 저작권 문제 없는 트랙이다. 상용 서비스에서는 스트리밍 제휴 카탈로그의 곡 메타데이터로 교체한다.",
+  "tracks": [
+    {"id": "calm_drive", "title": "고요한 차선", "artist": "BGM Studio", "valence": 0.4, "energy": 0.3, "tags": ["calm", "neutral", "comfort"]},
+    {"id": "comfort_rain", "title": "빗소리 아래에서", "artist": "BGM Studio", "valence": 0.1, "energy": 0.15, "tags": ["comfort", "sad", "lonely", "tired"]},
+    {"id": "warm_home", "title": "오늘도 버틴 나에게", "artist": "BGM Studio", "valence": 0.5, "energy": 0.35, "tags": ["comfort", "tired", "anxious", "calm"]},
+    {"id": "bright_morning", "title": "아침 햇살 램프", "artist": "BGM Studio", "valence": 0.85, "energy": 0.8, "tags": ["happy", "excited"]},
+    {"id": "night_city", "title": "도시의 밤 드라이브", "artist": "BGM Studio", "valence": 0.2, "energy": 0.5, "tags": ["neutral", "lonely", "angry", "calm"]},
+    {"id": "dream_road", "title": "설레는 국도", "artist": "BGM Studio", "valence": 0.7, "energy": 0.6, "tags": ["excited", "happy", "calm"]}
+  ]
+}
