@@ -41,7 +41,7 @@ adb shell am start -n com.iam.bgm/.MainActivity
 ### 2) 소스에서 빌드
 
 ```bash
-./gradlew :app:testDebugUnitTest   # 단위 테스트 (19개)
+./gradlew :app:testDebugUnitTest   # 단위 테스트 (20개)
 ./gradlew :app:assembleRelease     # app/build/outputs/apk/release/app-release.apk
 ```
 
@@ -108,11 +108,11 @@ tools/generate_tracks.py   데모 음원 합성기 (저작권 문제 없는 자�
 
 ## 테스트
 
-`./gradlew :app:testDebugUnitTest` — 19개 테스트, 앱이 실제로 쓰는 `assets` JSON을 그대로 읽어 검증합니다.
+`./gradlew :app:testDebugUnitTest` — 20개 테스트, 앱이 실제로 쓰는 `assets` JSON을 그대로 읽어 검증합니다.
 
 | 테스트 | 내용 |
 |---|---|
-| `CoreLogicTest` (10) | 기어→모드, 구간화, 부정 감정 BGM 원칙(모든 감정), 결정적 추천, 감정 분석, 음성 의도, 한마디 검수, 편지 매칭·만료·순위, 회전 구간 보류, 조사(와/과) |
+| `CoreLogicTest` (11) | 기어→모드, 구간화, 부정 감정 BGM 원칙(모든 감정), 결정적 추천, 감정 분석, 음성 의도, 한마디 검수, 편지 매칭·만료·순위, 회전 구간 보류, 조사(와/과), 회귀: 주차 안내 조사(이에요/예요, 모든 날씨) |
 | `ScenarioTest` (6) | 기획서 시나리오 1·2 전체(남기기→주차 일기→받기→고마움→다음 운전 알림 1회), 집·회사 차단, 위기 한마디, 주행 중 터치 무시, 대화 없는 주차 |
 | `LocationGateTest` (2) | 회귀: SDK 위치 갱신이 시연 콘솔로 옮긴 구간을 덮어쓰지 않음 |
 | `ClockMonotonicTest` (1) | 회귀: 작성 시각이 현재보다 늦은 편지는 매칭되지 않음 → 시연 시계는 단조 증가 |

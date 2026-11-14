@@ -100,9 +100,15 @@ class DiaryComposer(
         fun joinWithGwa(words: List<String>): String {
             if (words.size < 2) return words.joinToString("")
             val first = words[0]
-            val c = first.last()
-            val hasBatchim = c in '가'..'힣' && (c - '가') % 28 != 0
-            return first + (if (hasBatchim) "과 " else "와 ") + words[1]
+            return first + (if (hasBatchim(first)) "과 " else "와 ") + words[1]
+        }
+
+        /** "흐림이에요" / "비예요"처럼 받침에 맞는 서술격 조사를 붙인다. */
+        fun withCopula(word: String): String = word + (if (hasBatchim(word)) "이에요" else "예요")
+
+        private fun hasBatchim(word: String): Boolean {
+            val c = word.lastOrNull() ?: return false
+            return c in '가'..'힣' && (c - '가') % 28 != 0
         }
     }
 }

@@ -314,7 +314,7 @@ class BgmController(
         diary.bgmTrackIds.firstOrNull()?.let { playTrack(it) }
         vehicle.setAmbientColor(parseRgb(mood.colorHex)) { ok -> _state.value = _state.value.copy(ambientApplied = ok) }
         _state.value = _state.value.copy(latestDiary = diary, diaryMood = mood)
-        say("오늘의 일기가 완성됐어요. 마음 날씨는 ${mood.weather}예요.", listenAfter = false)
+        say(dialogue.prompt("diaryDone", "weatherIs" to DiaryComposer.withCopula(mood.weather)), listenAfter = false)
     }
 
     // ---------------- 보조 ----------------

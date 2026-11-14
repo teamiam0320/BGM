@@ -119,6 +119,18 @@ class CoreLogicTest {
         assertEquals("업무 스트레스와 피로", DiaryComposer.joinWithGwa(listOf("업무 스트레스", "피로")))
         assertEquals("슬픔과 불안", DiaryComposer.joinWithGwa(listOf("슬픔", "불안")))
     }
+
+    /** 회귀: 주차 안내가 받침과 무관하게 "~예요"를 붙여 "흐림예요"로 말하던 결함. */
+    @Test fun copulaFollowsBatchim() {
+        val expected = mapOf(
+            "맑음" to "맑음이에요", "햇살" to "햇살이에요", "흐림" to "흐림이에요", "천둥" to "천둥이에요",
+            "눈" to "눈이에요", "구름 조금" to "구름 조금이에요",
+            "비" to "비예요", "안개" to "안개예요", "무지개" to "무지개예요",
+        )
+        // 감정 사전의 모든 날씨가 빠짐없이 검사되고, 올바른 조사로 끝난다
+        assertEquals(expected.keys, TestData.lexicon.moods.map { it.weather }.toSet())
+        for ((weather, want) in expected) assertEquals(weather, want, DiaryComposer.withCopula(weather))
+    }
 }
 
 /** 회귀: 시계가 거꾸로 가면(편지 작성 시각 > 현재) 그 편지는 매칭되지 않는다 — 시연 시계는 단조 증가해야 하는 이유. */

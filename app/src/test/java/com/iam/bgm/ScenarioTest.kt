@@ -61,6 +61,8 @@ class ScenarioTest {
         assertEquals(DriveMode.PARKED, s.mode)
         val diary = assertNotNullAnd(s.latestDiary)
         assertEquals("tired", diary.moodId)
+        // 회귀: 주차 안내 문장의 조사 ("흐림예요" → "흐림이에요")
+        assertTrue(voice.spoken.contains("오늘의 일기가 완성됐어요. 마음 날씨는 흐림이에요."))
         assertTrue(diary.paragraphs.first().contains("35분"))
         // 부정 감정이므로 일기 BGM 1순위는 위로 곡이고, 주차 직후 그 곡이 재생된다
         assertTrue("comfort" in TestData.catalog.track(diary.bgmTrackIds.first())!!.tags)
