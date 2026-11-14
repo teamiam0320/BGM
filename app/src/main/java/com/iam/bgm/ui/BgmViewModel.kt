@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import com.iam.bgm.app.BgmController
 import com.iam.bgm.app.ManualLocationGate
+import com.iam.bgm.app.ManualVehicleGate
 import com.iam.bgm.core.Gear
 import com.iam.bgm.platform.AssetData
 import com.iam.bgm.platform.DemoDriver
@@ -32,11 +33,12 @@ class BgmViewModel(app: Application) : AndroidViewModel(app) {
     private val clock = ScenarioClock()
     private val voice = PleosVoicePort(app)
     private val location = ManualLocationGate(PleosLocationPort(app))
+    private val vehicle = ManualVehicleGate(PleosVehiclePort(app))
     private var counter = 0
 
     val controller = BgmController(
         lexicon = data.lexicon, catalog = data.catalog, dialogue = data.dialogue, policy = data.policy,
-        vehicle = PleosVehiclePort(app), location = location, voice = voice,
+        vehicle = vehicle, location = location, voice = voice,
         navi = PleosNaviPort(app), music = RawMusicPlayer(app), time = clock, store = store,
         ids = { "L${clock.nowMillis()}-${counter++}" },
     )
@@ -56,7 +58,7 @@ class BgmViewModel(app: Application) : AndroidViewModel(app) {
         controller.switchDriver(d.id, data.scenario.privateZones)
     }
 
-    fun gear(g: Gear) { controller.onGear(g); refresh() }
+    fun gear(g: Gear) { vehicle.inject(g); refresh() }
 
     fun moveTo(index: Int) {
         val p = data.scenario.route[index]
@@ -75,7 +77,8 @@ class BgmViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun resetDemo() {
-        controller.onGear(Gear.PARK)
+        vehicle.inject(Gear.PARK)
+        vehicle.release()
         location.release()
         store.reset()
         store.saveLetters(data.scenario.seedAsLetters(clock.nowMillis()))

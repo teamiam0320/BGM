@@ -45,6 +45,8 @@ data class UiState(
     val diaryMood: MoodDef? = null,
     val receivedThisTrip: List<Offer> = emptyList(),
     val myLetters: List<MusicLetter> = emptyList(),
+    /** 이 운전자의 지난 일기(최신순). 홈 화면 표시용. */
+    val pastDiaries: List<DiaryEntry> = emptyList(),
     val helpLine: String? = null,
     val ambientApplied: Boolean? = null,
     val portLabels: List<String> = emptyList(),
@@ -365,6 +367,7 @@ class BgmController(
             nowPlaying = music.currentTrackId?.let { catalog.track(it) },
             receivedThisTrip = receivedThisTrip.toList(),
             myLetters = store.letters().filter { it.authorId == driverId },
+            pastDiaries = store.diaries().filter { it.authorId == driverId }.sortedByDescending { it.createdAtMillis },
         )
     }
 
