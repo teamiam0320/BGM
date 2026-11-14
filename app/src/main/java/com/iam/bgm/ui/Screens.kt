@@ -443,36 +443,30 @@ private fun Transcript(captions: List<Caption>) {
 }
 
 /**
- * 수신 반경 안에 들어온 다른 사람의 노래(주행 지도 왼쪽 아래). 흘끗 볼 정도로 짧게: 곡명·가수·거리, 한마디는 한 줄.
- * 아미가 소개 중인 노래가 있으면 그것을 맨 위에 둔다. 반경 안에 노래가 없으면 표시하지 않는다.
+ * 수신 반경 안에 들어온 다른 사람의 노래(주행 지도 왼쪽 아래). 운전 중 읽을 거리를 줄이려고 **곡명만** 보인다
+ * (가수·한마디·거리는 보이지 않음). 아미가 소개 중인 노래가 있으면 그 곡을 테두리를 밝혀 보여 준다.
+ * 반경 안에 노래가 없으면 표시하지 않는다.
  */
 @Composable
 private fun NearbyCard(offer: Offer?, nearby: List<Nearby>, modifier: Modifier = Modifier) {
-    val top = offer?.let { o -> Nearby(o.letter, o.track, nearby.firstOrNull { it.letter.id == o.letter.id }?.meters ?: -1.0) } ?: nearby.firstOrNull()
+    val title = offer?.track?.title ?: nearby.firstOrNull()?.track?.title
     androidx.compose.animation.AnimatedVisibility(
-        visible = top != null, modifier = modifier,
+        visible = title != null, modifier = modifier,
         enter = androidx.compose.animation.fadeIn(tween(250)) + androidx.compose.animation.slideInHorizontally(tween(250)) { -it / 4 },
         exit = androidx.compose.animation.fadeOut(tween(200)),
     ) {
-        val n = top ?: return@AnimatedVisibility
-        val more = nearby.count { it.letter.id != n.letter.id }
-        val presenting = offer?.letter?.id == n.letter.id
-        Column(
-            Modifier.widthIn(max = 380.dp).clip(RoundedCornerShape(22.dp)).background(Color(0xE6161E36))
-                .border(1.5.dp, Violet.copy(alpha = if (presenting) 0.9f else 0.45f), RoundedCornerShape(22.dp)).padding(horizontal = 20.dp, vertical = 16.dp),
+        val t = title ?: return@AnimatedVisibility
+        Row(
+            Modifier.widthIn(max = 380.dp).clip(RoundedCornerShape(50)).background(Color(0xE6161E36))
+                .border(1.5.dp, Violet.copy(alpha = if (offer != null) 0.9f else 0.45f), RoundedCornerShape(50))
+                .padding(start = 14.dp, end = 22.dp, top = 10.dp, bottom = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(10.dp).clip(CircleShape).background(Violet))
-                Spacer(Modifier.width(8.dp))
-                Text(if (presenting) "아미가 소개하는 중" else "반경 안에 들어온 노래", color = Violet, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                if (n.meters >= 0) { Spacer(Modifier.width(8.dp)); Text("${(n.meters / 10).toInt() * 10}m", color = Dim, fontSize = 15.sp) }
+            Box(Modifier.size(32.dp).clip(CircleShape).background(Violet.copy(alpha = 0.18f)), contentAlignment = Alignment.Center) {
+                Text("♪", color = Violet, fontSize = 18.sp)
             }
-            Spacer(Modifier.height(6.dp))
-            Text(n.track.title, color = TextHi, fontSize = 24.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(n.track.artist, color = Soft, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Spacer(Modifier.height(6.dp))
-            Text("“${n.letter.message}”", color = Soft, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (more > 0) { Spacer(Modifier.height(6.dp)); Text("근처에 ${more}곡 더", color = Dim, fontSize = 15.sp) }
+            Spacer(Modifier.width(12.dp))
+            Text(t, color = TextHi, fontSize = 24.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
