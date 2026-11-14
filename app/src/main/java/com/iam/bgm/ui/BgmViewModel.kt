@@ -95,6 +95,13 @@ class BgmViewModel(app: Application) : AndroidViewModel(app) {
         selectDriver(data.scenario.drivers.first(), 0)
     }
 
+    /** 일기장·내 노래 화면용 조회(현재 운전자 기준). */
+    fun letterById(id: String) = store.letters().firstOrNull { it.id == id }
+    fun receivedLetters(): List<com.iam.bgm.core.MusicLetter> {
+        val ids = store.received(controller.state.value.driverId)
+        return store.letters().filter { it.id in ids }.sortedByDescending { it.createdAtMillis }
+    }
+
     private var autoJob: Job? = null
 
     /**

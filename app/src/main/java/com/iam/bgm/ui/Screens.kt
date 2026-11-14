@@ -34,6 +34,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -87,26 +88,40 @@ private val Live = Color(0xFF6EE7B7)
 
 private fun hex(h: String) = Color(0xFF000000 or h.removePrefix("#").toLong(16))
 
+/** 주차 중 메뉴. 주행 중에는 메뉴를 숨기고 음성 전용 화면만 둔다. */
+private enum class Tab(val label: String) { MAP("지도"), DIARY("일기장"), SONGS("내 노래") }
+
 @Composable
 fun BgmApp(vm: BgmViewModel) {
     val s by vm.controller.state.collectAsState()
     val c by vm.console.collectAsState()
-    var consoleOpen by remember { mutableStateOf(true) }
-    // 주차 일기가 있으면 화면 전체가 오늘의 감정 색으로 은은하게 물든다
+    // 시연 콘솔은 심사용이라 기본으로 닫아 둔다(상단의 작은 '심사용' 버튼으로 연다)
+    var consoleOpen by remember { mutableStateOf(false) }
+    var tab by remember { mutableStateOf(Tab.MAP) }
+    var diarySel by remember { mutableStateOf<String?>(null) }
+    // 주차해서 일기가 완성되면 일기장의 그 일기를 연다(도착 의식)
+    LaunchedEffect(s.latestDiary?.id) { s.latestDiary?.let { tab = Tab.DIARY; diarySel = it.id } }
+    val driving = s.mode == DriveMode.DRIVING
     val tint by animateColorAsState(
-        if (s.mode == DriveMode.PARKED) s.diaryMood?.let { hex(it.colorHex) } ?: Accent else Accent,
+        if (!driving && tab == Tab.DIARY) s.diaryMood?.let { hex(it.colorHex) } ?: Accent else Accent,
         tween(900), label = "tint",
     )
     Row(Modifier.fillMaxSize().background(Ink)) {
+        if (!driving) NavRail(tab) { tab = it }
         Box(
             Modifier.weight(1f).fillMaxHeight()
                 .background(Brush.verticalGradient(listOf(Ink2, Ink)))
                 .background(Brush.radialGradient(listOf(tint.copy(alpha = 0.16f), Color.Transparent), center = Offset(1400f, 0f), radius = 1300f)),
         ) {
             Column(Modifier.fillMaxSize()) {
-                TopBar(s, vm, consoleOpen) { consoleOpen = !consoleOpen }
-                Crossfade(targetState = s.mode == DriveMode.DRIVING, animationSpec = tween(450), label = "mode") { driving ->
-                    if (driving) DrivingScreen(s, vm) else ParkedScreen(s, vm)
+                TopBar(s, vm, c, consoleOpen) { consoleOpen = !consoleOpen }
+                Crossfade(targetState = if (driving) null else tab, animationSpec = tween(350), label = "screen") { t ->
+                    when (t) {
+                        null -> DrivingScreen(s, vm)
+                        Tab.MAP -> Box(Modifier.fillMaxSize().padding(start = 40.dp, end = 40.dp, top = 12.dp, bottom = 36.dp)) { HomeMap(s, vm) }
+                        Tab.DIARY -> DiaryBook(s, vm, diarySel) { diarySel = it }
+                        Tab.SONGS -> MySongs(s, vm)
+                    }
                 }
             }
         }
@@ -114,28 +129,252 @@ fun BgmApp(vm: BgmViewModel) {
     }
 }
 
-// ---------------- 상단 바: 상태·구간·콘솔 토글 ----------------
-
 @Composable
-private fun TopBar(s: UiState, vm: BgmViewModel, consoleOpen: Boolean, onToggle: () -> Unit) {
-    val zoneLabel = s.zoneId?.let { z -> vm.data.scenario.route.firstOrNull { Zone.idOf(it.point) == z }?.label }
-    Row(
-        Modifier.fillMaxWidth().padding(start = 48.dp, end = 24.dp, top = 24.dp, bottom = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
+private fun NavRail(tab: Tab, onTab: (Tab) -> Unit) {
+    Column(
+        Modifier.width(128.dp).fillMaxHeight().background(Color(0xFF080C17)).border(1.dp, Hair).padding(vertical = 28.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Text("BGM", color = Accent, fontSize = 26.sp, fontWeight = FontWeight.Black)
-        Spacer(Modifier.width(20.dp))
-        val driving = s.mode == DriveMode.DRIVING
+        Text("with 에이미", color = Dim, fontSize = 13.sp)
+        Spacer(Modifier.height(24.dp))
+        Tab.values().forEach { t ->
+            val on = t == tab
+            Column(
+                Modifier.width(100.dp).clip(RoundedCornerShape(22.dp)).background(if (on) Accent.copy(alpha = 0.16f) else Color.Transparent)
+                    .clickable { onTab(t) }.padding(vertical = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                RailIcon(t, if (on) Accent else Soft)
+                Spacer(Modifier.height(8.dp))
+                Text(t.label, color = if (on) Accent else Soft, fontSize = 17.sp, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal)
+            }
+        }
+    }
+}
+
+/** 메뉴 아이콘(외부 아이콘 없이 직접 그림). */
+@Composable
+private fun RailIcon(t: Tab, c: Color) {
+    Canvas(Modifier.size(34.dp)) {
+        val w = size.width
+        val st = Stroke(w * 0.08f, cap = StrokeCap.Round)
+        when (t) {
+            Tab.MAP -> {
+                val p = Path().apply {
+                    moveTo(w * 0.5f, w * 0.95f); cubicTo(w * 0.15f, w * 0.6f, w * 0.12f, w * 0.38f, w * 0.12f, w * 0.38f)
+                    cubicTo(w * 0.12f, w * 0.12f, w * 0.88f, w * 0.12f, w * 0.88f, w * 0.38f)
+                    cubicTo(w * 0.88f, w * 0.38f, w * 0.85f, w * 0.6f, w * 0.5f, w * 0.95f); close()
+                }
+                drawPath(p, c, style = st)
+                drawCircle(c, radius = w * 0.11f, center = Offset(w * 0.5f, w * 0.38f))
+            }
+            Tab.DIARY -> {
+                drawRoundRect(c, topLeft = Offset(w * 0.18f, w * 0.1f), size = Size(w * 0.64f, w * 0.8f), cornerRadius = CornerRadius(w * 0.08f), style = st)
+                drawLine(c, Offset(w * 0.34f, w * 0.1f), Offset(w * 0.34f, w * 0.9f), strokeWidth = w * 0.08f)
+                drawLine(c, Offset(w * 0.45f, w * 0.36f), Offset(w * 0.7f, w * 0.36f), strokeWidth = w * 0.07f, cap = StrokeCap.Round)
+                drawLine(c, Offset(w * 0.45f, w * 0.52f), Offset(w * 0.66f, w * 0.52f), strokeWidth = w * 0.07f, cap = StrokeCap.Round)
+            }
+            Tab.SONGS -> {
+                drawCircle(c, radius = w * 0.14f, center = Offset(w * 0.32f, w * 0.76f))
+                drawCircle(c, radius = w * 0.14f, center = Offset(w * 0.74f, w * 0.66f))
+                drawLine(c, Offset(w * 0.45f, w * 0.76f), Offset(w * 0.45f, w * 0.18f), strokeWidth = w * 0.08f)
+                drawLine(c, Offset(w * 0.87f, w * 0.66f), Offset(w * 0.87f, w * 0.08f), strokeWidth = w * 0.08f)
+                drawLine(c, Offset(w * 0.45f, w * 0.18f), Offset(w * 0.87f, w * 0.08f), strokeWidth = w * 0.12f, cap = StrokeCap.Round)
+            }
+        }
+    }
+}
+
+@Composable
+private fun TopBar(s: UiState, vm: BgmViewModel, c: ConsoleState, consoleOpen: Boolean, onToggle: () -> Unit) {
+    val zoneLabel = s.zoneId?.let { z -> vm.data.scenario.route.firstOrNull { Zone.idOf(it.point) == z }?.label }
+    val driving = s.mode == DriveMode.DRIVING
+    Row(
+        Modifier.fillMaxWidth().padding(start = 40.dp, end = 24.dp, top = 24.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (driving) {
+            Text("BGM", color = Accent, fontSize = 26.sp, fontWeight = FontWeight.Black)
+            Spacer(Modifier.width(20.dp))
+        }
         Pill(if (driving) "주행 중 · 음성 전용" else "주차 중", dot = if (driving) Live else Dim)
         if (zoneLabel != null) {
             Spacer(Modifier.width(12.dp))
             Pill(zoneLabel, dot = Accent)
         }
         Spacer(Modifier.weight(1f))
+        c.autoProgress?.let { p ->
+            Pill("자동 주행 시연 ${(p * 100).toInt()}%", dot = Violet)
+            Spacer(Modifier.width(12.dp))
+        }
         Box(
             Modifier.clip(RoundedCornerShape(50)).border(1.dp, Hair, RoundedCornerShape(50))
-                .clickable(onClick = onToggle).padding(horizontal = 18.dp, vertical = 10.dp),
-        ) { Text(if (consoleOpen) "시연 콘솔 닫기" else "시연 콘솔 열기", color = Soft, fontSize = 15.sp) }
+                .clickable(onClick = onToggle).padding(horizontal = 14.dp, vertical = 8.dp),
+        ) { Text(if (consoleOpen) "콘솔 닫기" else "심사용", color = Dim, fontSize = 13.sp) }
+    }
+}
+
+// ---------------- 일기장 ----------------
+
+@Composable
+private fun DiaryBook(s: UiState, vm: BgmViewModel, selected: String?, onSelect: (String) -> Unit) {
+    val diaries = s.pastDiaries
+    Row(
+        Modifier.fillMaxSize().padding(start = 40.dp, end = 40.dp, top = 12.dp, bottom = 36.dp),
+        horizontalArrangement = Arrangement.spacedBy(28.dp),
+    ) {
+        if (diaries.isEmpty()) {
+            Box(Modifier.fillMaxSize().clip(RoundedCornerShape(32.dp)).background(Glass).border(1.dp, Hair, RoundedCornerShape(32.dp)), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    WeatherGlyph("구름 조금", Accent, 96.dp)
+                    Spacer(Modifier.height(18.dp))
+                    Text("아직 일기가 없어요", color = TextHi, fontSize = 30.sp, fontWeight = FontWeight.Bold)
+                    Text("기어를 D로 바꾸고 에이미에게 하루를 털어놓으면, 주차할 때 첫 일기가 완성돼요.", color = Soft, fontSize = 20.sp)
+                }
+            }
+            return@Row
+        }
+        val current = diaries.firstOrNull { it.id == selected } ?: diaries.first()
+        // 왼쪽: 목록 + 마음 날씨 흐름
+        Column(Modifier.width(380.dp).fillMaxHeight()) {
+            Text("일기장", color = TextHi, fontSize = 30.sp, fontWeight = FontWeight.Bold)
+            Text("${diaries.size}개의 하루", color = Dim, fontSize = 17.sp)
+            Spacer(Modifier.height(16.dp))
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(Glass).padding(18.dp)) {
+                Text("최근 마음 날씨", color = Soft, fontSize = 15.sp)
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    diaries.take(7).reversed().forEach { d ->
+                        val m = runCatching { vm.data.lexicon.mood(d.moodId) }.getOrNull()
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            if (m != null) WeatherGlyph(m.weather, hex(m.colorHex), 38.dp)
+                            Text(d.dateLabel.substringBefore(" ("), color = Dim, fontSize = 12.sp)
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                diaries.forEach { d ->
+                    val m = runCatching { vm.data.lexicon.mood(d.moodId) }.getOrNull()
+                    val on = d.id == current.id
+                    Row(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))
+                            .background(if (on) Accent.copy(alpha = 0.14f) else Glass)
+                            .border(1.dp, if (on) Accent.copy(alpha = 0.5f) else Hair, RoundedCornerShape(20.dp))
+                            .clickable { onSelect(d.id) }.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        if (m != null) WeatherGlyph(m.weather, hex(m.colorHex), 48.dp)
+                        Spacer(Modifier.width(14.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(d.title, color = TextHi, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+                            Text(d.paragraphs.lastOrNull().orEmpty(), color = Dim, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                        if (d.receivedLetterIds.isNotEmpty()) {
+                            Spacer(Modifier.width(8.dp))
+                            Box(Modifier.size(10.dp).clip(CircleShape).background(Violet))
+                        }
+                    }
+                }
+            }
+        }
+        // 오른쪽: 선택한 일기
+        DiaryDetail(current, s, vm, Modifier.weight(1f).fillMaxHeight())
+    }
+}
+
+@Composable
+private fun DiaryDetail(diary: DiaryEntry, s: UiState, vm: BgmViewModel, modifier: Modifier) {
+    val isLatest = s.latestDiary?.id == diary.id
+    val mood = if (isLatest) s.diaryMood else runCatching { vm.data.lexicon.mood(diary.moodId) }.getOrNull()
+    val received = diary.receivedLetterIds.mapNotNull { id -> vm.letterById(id)?.let { l -> vm.data.catalog.track(l.trackId)?.let { l to it } } }
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+        Box(Modifier.weight(1.25f).fillMaxHeight()) { DiaryPanel(diary, mood, if (isLatest) s.helpLine else null) }
+        Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+            mood?.let { MoodCard(it, if (isLatest) s.ambientApplied else null) }
+            Card(if (isLatest) "오늘의 일기 BGM" else "그날의 BGM") {
+                diary.bgmTrackIds.mapNotNull { vm.data.catalog.track(it) }.forEach { t ->
+                    TrackRow(t, playing = s.nowPlaying?.id == t.id, accent = Accent) { vm.controller.playFromParked(t.id) }
+                }
+            }
+            if (received.isNotEmpty()) {
+                Card(if (isLatest) "오늘 받은 노래" else "그날 받은 노래", titleColor = Violet) {
+                    received.forEach { (l, t) ->
+                        TrackRow(t, playing = s.nowPlaying?.id == t.id, note = "“${l.message}”", accent = Violet) { vm.controller.playFromParked(t.id) }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ---------------- 내 노래 ----------------
+
+@Composable
+private fun MySongs(s: UiState, vm: BgmViewModel) {
+    val received = vm.receivedLetters()
+    Row(
+        Modifier.fillMaxSize().padding(start = 40.dp, end = 40.dp, top = 12.dp, bottom = 36.dp),
+        horizontalArrangement = Arrangement.spacedBy(28.dp),
+    ) {
+        Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Text("내가 길 위에 남긴 노래", color = TextHi, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+            Text("비슷한 하루를 보낸 누군가가 그 길을 지날 때 닿아요", color = Dim, fontSize = 17.sp)
+            if (s.myLetters.isEmpty()) EmptyNote("운전 중 \"에이미, 이 노래 여기 남겨줘\"라고 말해 보세요.")
+            s.myLetters.sortedByDescending { it.createdAtMillis }.forEach { l ->
+                val t = vm.data.catalog.track(l.trackId)
+                val reached = l.thankedBy.isNotEmpty()
+                SongCard(
+                    title = t?.title ?: l.trackId, message = l.message, place = "${zoneName(l.zoneId, vm)} 부근",
+                    badge = if (reached) "${l.thankedBy.size}명에게 닿았어요" else "닿기를 기다리는 중",
+                    accent = if (reached) Violet else Dim, playing = s.nowPlaying?.id == l.trackId,
+                ) { vm.controller.playFromParked(l.trackId) }
+            }
+        }
+        Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Text("길 위에서 받은 노래", color = TextHi, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+            Text("누군가 남긴 위로를 다시 들어요", color = Dim, fontSize = 17.sp)
+            if (received.isEmpty()) EmptyNote("노래가 기다리는 길을 지나면, 에이미가 들려줄 거예요.")
+            received.forEach { l ->
+                val t = vm.data.catalog.track(l.trackId)
+                SongCard(
+                    title = t?.title ?: l.trackId, message = l.message, place = "${zoneName(l.zoneId, vm)} 부근",
+                    badge = if (s.driverId in l.thankedBy) "고마움 전함" else "받은 노래",
+                    accent = Violet, playing = s.nowPlaying?.id == l.trackId,
+                ) { vm.controller.playFromParked(l.trackId) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SongCard(title: String, message: String, place: String, badge: String, accent: Color, playing: Boolean, onPlay: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(if (playing) accent.copy(alpha = 0.12f) else Glass)
+            .border(1.dp, Hair, RoundedCornerShape(24.dp)).clickable(onClick = onPlay).padding(22.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(56.dp), contentAlignment = Alignment.Center) { if (playing) Equalizer(accent, 32.dp) else PlayIcon(Soft) }
+        Spacer(Modifier.width(16.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, color = TextHi, fontSize = 23.sp, fontWeight = FontWeight.SemiBold)
+            Text("“$message”", color = Soft, fontSize = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(place, color = Dim, fontSize = 15.sp)
+        }
+        Spacer(Modifier.width(12.dp))
+        Box(Modifier.clip(RoundedCornerShape(50)).background(accent.copy(alpha = 0.16f)).padding(horizontal = 14.dp, vertical = 8.dp)) {
+            Text(badge, color = accent, fontSize = 15.sp)
+        }
+    }
+}
+
+@Composable
+private fun EmptyNote(text: String) {
+    Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(Glass).border(1.dp, Hair, RoundedCornerShape(24.dp)).padding(28.dp)) {
+        Text(text, color = Soft, fontSize = 19.sp)
     }
 }
 
@@ -258,41 +497,6 @@ private fun Equalizer(c: Color, height: Dp) {
 }
 
 // ---------------- 정차 화면 ----------------
-
-@Composable
-private fun ParkedScreen(s: UiState, vm: BgmViewModel) {
-    val diary = s.latestDiary
-    Row(
-        Modifier.fillMaxSize().padding(start = 48.dp, end = 48.dp, top = 16.dp, bottom = 40.dp),
-        horizontalArrangement = Arrangement.spacedBy(28.dp),
-    ) {
-        if (diary == null) { HomeMap(s, vm); return@Row }
-        Box(Modifier.weight(1.3f).fillMaxHeight()) {
-            DiaryPanel(diary, s.diaryMood, s.helpLine)
-        }
-        Column(
-            Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(20.dp),
-        ) {
-            run {
-                s.diaryMood?.let { MoodCard(it, s.ambientApplied) }
-                Card("오늘의 일기 BGM") {
-                    diary.bgmTrackIds.mapNotNull { vm.data.catalog.track(it) }.forEach { t ->
-                        TrackRow(t, playing = s.nowPlaying?.id == t.id, accent = Accent) { vm.controller.playFromParked(t.id) }
-                    }
-                }
-                if (s.receivedThisTrip.isNotEmpty()) {
-                    Card("오늘 받은 노래", titleColor = Violet) {
-                        s.receivedThisTrip.forEach { o ->
-                            TrackRow(o.track, playing = s.nowPlaying?.id == o.track.id, note = "“${o.letter.message}”", accent = Violet) { vm.controller.playFromParked(o.track.id) }
-                        }
-                    }
-                }
-            }
-            if (s.myLetters.isNotEmpty()) MyLetters(s, vm)
-        }
-    }
-}
 
 /** 대표 기능 소개. 일기가 아직 없을 때 홈 오른쪽에 둔다. */
 @Composable
