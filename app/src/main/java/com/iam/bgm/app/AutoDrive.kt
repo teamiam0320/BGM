@@ -22,7 +22,7 @@ sealed interface DriveAction {
 
 /** 자동 주행이 판단에 쓰는 현재 상태. */
 interface DriveEnv {
-    /** 에이미가 말하는 중이면 다음 발화를 미룬다. */
+    /** 아미가 말하는 중이면 다음 발화를 미룬다. */
     val voiceBusy: Boolean
     val offerPending: Boolean
     /** 이 구간에 지금 들어가도 되는가(말하는 중에 노래가 기다리는 구간에 들어가 제안을 놓치지 않게). */
@@ -68,7 +68,7 @@ class AutoDrive(private val track: List<GeoPoint>, timeline: DriverTimeline) {
     /** 진행률을 [df]만큼 밀고, 이번 틱에 적용할 동작을 돌려준다. */
     fun step(df: Double, env: DriveEnv): List<DriveAction> {
         val out = mutableListOf<DriveAction>()
-        // 1) 때가 된 사건(순서대로). 발화는 에이미가 말을 마친 뒤에.
+        // 1) 때가 된 사건(순서대로). 발화는 아미가 말을 마친 뒤에.
         while (next < events.size && events[next].at <= progress + 1e-9) {
             val e = events[next]
             if (e.say != null && env.voiceBusy) break
@@ -80,7 +80,7 @@ class AutoDrive(private val track: List<GeoPoint>, timeline: DriverTimeline) {
             e.gear?.let { out += DriveAction.SetGear(it) }
             e.say?.let { out += DriveAction.Say(it) }
             next++
-            if (e.say != null) break // 발화 직후 에이미 답이 시작되므로 다음 사건은 다음 틱에
+            if (e.say != null) break // 발화 직후 아미 답이 시작되므로 다음 사건은 다음 틱에
         }
         // 2) 이동
         if (progress < 1.0) {

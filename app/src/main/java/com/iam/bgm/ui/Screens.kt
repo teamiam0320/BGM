@@ -138,7 +138,7 @@ private fun NavRail(tab: Tab, onTab: (Tab) -> Unit) {
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Text("BGM", color = Accent, fontSize = 26.sp, fontWeight = FontWeight.Black)
-        Text("with 에이미", color = Dim, fontSize = 13.sp)
+        Text("with 아미", color = Dim, fontSize = 13.sp)
         Spacer(Modifier.height(24.dp))
         Tab.values().forEach { t ->
             val on = t == tab
@@ -232,7 +232,7 @@ private fun DiaryBook(s: UiState, vm: BgmViewModel, selected: String?, onSelect:
                     WeatherGlyph("구름 조금", Accent, 96.dp)
                     Spacer(Modifier.height(18.dp))
                     Text("아직 일기가 없어요", color = TextHi, fontSize = 30.sp, fontWeight = FontWeight.Bold)
-                    Text("기어를 D로 바꾸고 에이미에게 하루를 털어놓으면, 주차할 때 첫 일기가 완성돼요.", color = Soft, fontSize = 20.sp)
+                    Text("기어를 D로 바꾸고 아미에게 하루를 털어놓으면, 주차할 때 첫 일기가 완성돼요.", color = Soft, fontSize = 20.sp)
                 }
             }
             return@Row
@@ -324,7 +324,7 @@ private fun MySongs(s: UiState, vm: BgmViewModel) {
         Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Text("내가 길 위에 남긴 노래", color = TextHi, fontSize = 28.sp, fontWeight = FontWeight.Bold)
             Text("비슷한 하루를 보낸 누군가가 그 길을 지날 때 닿아요", color = Dim, fontSize = 17.sp)
-            if (s.myLetters.isEmpty()) EmptyNote("운전 중 \"에이미, 이 노래 여기 남겨줘\"라고 말해 보세요.")
+            if (s.myLetters.isEmpty()) EmptyNote("운전 중 \"아미, 이 노래 여기 남겨줘\"라고 말해 보세요.")
             s.myLetters.sortedByDescending { it.createdAtMillis }.forEach { l ->
                 val t = vm.data.catalog.track(l.trackId)
                 val reached = l.thankedBy.isNotEmpty()
@@ -338,7 +338,7 @@ private fun MySongs(s: UiState, vm: BgmViewModel) {
         Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Text("길 위에서 받은 노래", color = TextHi, fontSize = 28.sp, fontWeight = FontWeight.Bold)
             Text("누군가 남긴 위로를 다시 들어요", color = Dim, fontSize = 17.sp)
-            if (received.isEmpty()) EmptyNote("노래가 기다리는 길을 지나면, 에이미가 들려줄 거예요.")
+            if (received.isEmpty()) EmptyNote("노래가 기다리는 길을 지나면, 아미가 들려줄 거예요.")
             received.forEach { l ->
                 val t = vm.data.catalog.track(l.trackId)
                 SongCard(
@@ -429,7 +429,7 @@ private fun Transcript(captions: List<Caption>) {
             Spacer(Modifier.height(20.dp))
         }
         if (lastAmi.isNotEmpty()) {
-            Text("에이미", color = Accent, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            Text("아미", color = Accent, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(4.dp))
             Text(lastAmi, color = TextHi, fontSize = 36.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, maxLines = 3, lineHeight = 48.sp)
         }
@@ -472,7 +472,7 @@ private fun NowPlaying(t: Track?) {
             Text(if (t != null) "지금 흐르는 BGM" else "BGM", color = Dim, fontSize = 16.sp)
             Text(t?.title ?: "재생 중인 BGM 없음", color = TextHi, fontSize = 28.sp, fontWeight = FontWeight.SemiBold)
         }
-        Text("\"에이미, 이 노래 여기 남겨줘\"", color = Soft, fontSize = 19.sp)
+        Text("\"아미, 이 노래 여기 남겨줘\"", color = Soft, fontSize = 19.sp)
     }
 }
 
@@ -514,7 +514,7 @@ private fun LetterIntro() {
             Text("길 위의 음악 편지", color = TextHi, fontSize = 26.sp, fontWeight = FontWeight.Bold)
         }
         Spacer(Modifier.height(16.dp))
-        Text("“에이미, 이 노래 여기 남겨줘”", color = Violet, fontSize = 21.sp, fontWeight = FontWeight.SemiBold)
+        Text("“아미, 이 노래 여기 남겨줘”", color = Violet, fontSize = 21.sp, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(8.dp))
         Text("지금 듣는 노래와 한마디를 이 길에 남기면, 비슷한 하루를 보낸 누군가가 같은 길을 지날 때 위로로 받아요.", color = Soft, fontSize = 19.sp, lineHeight = 29.sp)
         Spacer(Modifier.height(12.dp))
@@ -568,7 +568,7 @@ private fun ListenBadge(listening: Boolean, modifier: Modifier) {
     ) {
         Box(Modifier.size(14.dp).scale(if (listening) k else 1f).clip(CircleShape).background(if (listening) Live else Accent))
         Spacer(Modifier.width(10.dp))
-        Text(if (listening) "듣고 있어요" else "에이미", color = TextHi, fontSize = 19.sp, fontWeight = FontWeight.SemiBold)
+        Text(if (listening) "듣고 있어요" else "아미", color = TextHi, fontSize = 19.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -586,7 +586,7 @@ private fun HomeMap(s: UiState, vm: BgmViewModel) {
             )
             Column(Modifier.align(Alignment.TopStart).padding(28.dp)) {
                 Text("음악 지도", color = TextHi, fontSize = 30.sp, fontWeight = FontWeight.Bold)
-                Text("노래가 기다리는 길 · 지나갈 때 에이미가 들려줘요", color = Soft, fontSize = 18.sp)
+                Text("노래가 기다리는 길 · 지나갈 때 아미가 들려줘요", color = Soft, fontSize = 18.sp)
             }
             Row(Modifier.align(Alignment.BottomStart).padding(24.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(14.dp).clip(CircleShape).background(Violet))
@@ -596,7 +596,7 @@ private fun HomeMap(s: UiState, vm: BgmViewModel) {
                 Text("  내가 남긴 노래", color = Soft, fontSize = 16.sp)
             }
             Text(
-                "기어를 D로 바꾸면 에이미가 먼저 말을 걸어요",
+                "기어를 D로 바꾸면 아미가 먼저 말을 걸어요",
                 color = Accent, fontSize = 17.sp,
                 modifier = Modifier.align(Alignment.BottomEnd).padding(24.dp),
             )
@@ -626,7 +626,7 @@ private fun ZoneDetail(zoneId: String, s: UiState, vm: BgmViewModel) {
         Spacer(Modifier.height(12.dp))
         if (waiting > 0) {
             Text("이 길에서 노래 ${waiting}곡이 기다리고 있어요", color = Violet, fontSize = 21.sp, fontWeight = FontWeight.SemiBold)
-            Text("어떤 노래인지는 비슷한 하루를 보낸 날 이 길을 지나면 에이미가 들려줘요.", color = Soft, fontSize = 18.sp, lineHeight = 27.sp)
+            Text("어떤 노래인지는 비슷한 하루를 보낸 날 이 길을 지나면 아미가 들려줘요.", color = Soft, fontSize = 18.sp, lineHeight = 27.sp)
         } else if (mine.isEmpty()) {
             Text("아직 이 길에 남겨진 노래가 없어요", color = Soft, fontSize = 19.sp)
         }

@@ -66,7 +66,7 @@ class CoreLogicTest {
     }
 
     @Test fun voiceIntents() {
-        assertEquals(VoiceIntent.LEAVE_SONG, VoiceIntentParser.parse("에이미, 이 노래 여기 남겨줘"))
+        assertEquals(VoiceIntent.LEAVE_SONG, VoiceIntentParser.parse("아미, 이 노래 여기 남겨줘"))
         assertEquals(VoiceIntent.THANKS, VoiceIntentParser.parse("고마워"))
         assertEquals(VoiceIntent.YES, VoiceIntentParser.parse("응", awaitingYesNo = true))
         assertEquals(VoiceIntent.NO, VoiceIntentParser.parse("아니 괜찮아", awaitingYesNo = true))

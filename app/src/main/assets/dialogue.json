@@ -22,7 +22,7 @@
     "neutral": ["오늘 하루도 무사히 마무리했어요.", "담담하게 지나간 하루도 소중한 하루예요."],
     "positive": ["좋은 기운을 내일까지 가져가요.", "오늘의 좋은 순간을 오래 기억해요."]
   },
-  "diaryIntro": "{period}길 {minutes}분 동안 에이미와 이야기를 나눴다.",
+  "diaryIntro": "{period}길 {minutes}분 동안 아미와 이야기를 나눴다.",
   "diaryQuote": "\"{text}\"라고 털어놓았다.",
   "prompts": {
     "askMessage": "좋아요. 이 노래와 함께 남길 한마디가 있어요?",

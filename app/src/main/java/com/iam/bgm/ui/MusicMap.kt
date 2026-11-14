@@ -510,7 +510,7 @@ private fun DrawScope.sphere(g: Offset, r: Float, color: Color, glow: Float) {
     )
 }
 
-/** 노래 수신 반경: 이 원 안에 노래가 들어오면 에이미가 들려준다. */
+/** 노래 수신 반경: 이 원 안에 노래가 들어오면 아미가 들려준다. */
 private fun DrawScope.pickupRing(c: Offset, r: Float, u: Float) {
     drawCircle(PinViolet.copy(alpha = 0.08f), radius = r, center = c)
     drawCircle(PinViolet.copy(alpha = 0.45f), radius = r, center = c, style = Stroke(2.2f * u))
