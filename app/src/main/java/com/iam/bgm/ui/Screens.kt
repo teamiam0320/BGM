@@ -162,7 +162,7 @@ private fun DrivingScreen(s: UiState, vm: BgmViewModel) {
         // 흘끗 보는 지도: 글자 없이 경로·내 위치·노래가 있는 구간의 빛나는 점만. 노래 내용은 음성으로만.
         Box(Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(Color(0xFF0D1426)).border(1.dp, Hair, RoundedCornerShape(28.dp))) {
             MusicMap(
-                route = vm.data.scenario.route, map = vm.data.scenario.map, osm = vm.data.osm, pins = pinsOf(s),
+                route = vm.data.scenario.route, map = vm.data.scenario.map, osm = vm.data.osm, track = vm.data.scenario.trackPoints, position = s.position, pins = pinsOf(s),
                 currentZone = s.zoneId, offerZone = s.pendingOffer?.letter?.zoneId,
                 detail = false, selected = null, onSelect = {}, modifier = Modifier.fillMaxSize(),
             )
@@ -357,7 +357,7 @@ private fun HomeMap(s: UiState, vm: BgmViewModel) {
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(20.dp)) {
         Box(Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(32.dp)).background(Color(0xFF0D1426)).border(1.dp, Hair, RoundedCornerShape(32.dp))) {
             MusicMap(
-                route = vm.data.scenario.route, map = vm.data.scenario.map, osm = vm.data.osm, pins = pins,
+                route = vm.data.scenario.route, map = vm.data.scenario.map, osm = vm.data.osm, track = vm.data.scenario.trackPoints, position = s.position, pins = pins,
                 currentZone = s.zoneId, offerZone = null, detail = true, selected = selected,
                 onSelect = { selected = it }, modifier = Modifier.fillMaxSize(),
             )
@@ -650,6 +650,23 @@ private fun DemoConsole(vm: BgmViewModel, s: UiState, c: ConsoleState) {
         Text("시연 콘솔 (심사용)", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
         Text("실차에서는 기어·위치·음성이 Pleos SDK에서 들어옵니다. 여기서는 같은 이벤트를 수동으로 주입합니다.", color = Soft, fontSize = 15.sp)
         Text("시나리오 시각 ${c.clockLabel} · ${if (s.mode == DriveMode.DRIVING) "주행" else "주차"}", color = Accent, fontSize = 18.sp)
+
+        if (vm.data.scenario.autoDrive != null) {
+            Label("자동 주행 (실제 도로 경로)")
+            val running = c.autoProgress != null
+            Button(
+                onClick = { if (running) vm.stopAutoDrive() else vm.startAutoDrive() },
+                enabled = running || s.mode == DriveMode.PARKED,
+                colors = ButtonDefaults.buttonColors(containerColor = if (running) Color(0xFF5A3A7A) else Violet, disabledContainerColor = Color(0xFF141A28)),
+                shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    if (running) "■ 멈춤 · ${(c.autoProgress!! * 100).toInt()}%" else "▶ ${c.driver.label.substringBefore(" (")} 자동 주행",
+                    color = if (running) Color.White else Ink, fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
+                )
+            }
+            Text("출발(D) → 대화 → 노래 남기기·받기 → 주차(P)까지 저절로 진행돼요. 아래 버튼으로 장면별 시연도 할 수 있어요.", color = Soft, fontSize = 14.sp)
+        }
 
         Label("1. 운전자")
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {

@@ -3,6 +3,7 @@ package com.iam.bgm.platform
 import android.content.Context
 import android.media.MediaPlayer
 import android.util.Log
+import com.iam.bgm.app.DriverTimeline
 import com.iam.bgm.app.MusicPort
 import com.iam.bgm.app.StorePort
 import com.iam.bgm.app.TimePort
@@ -83,13 +84,21 @@ data class OsmMap(
 data class MapData(val river: List<List<Double>> = emptyList(), val landmarks: List<Landmark> = emptyList())
 
 @Serializable
+data class AutoDriveData(val simSeconds: Int = 150, val drivers: Map<String, DriverTimeline> = emptyMap())
+
+@Serializable
 data class DemoScenario(
     val version: Int,
     val route: List<RoutePoint>,
     val drivers: List<DemoDriver>,
     val seedLetters: List<SeedLetter>,
     val map: MapData = MapData(),
+    /** 자동 주행용 실제 도로 경로 [lat, lng, ...] (OSRM, tools/track_build.py). */
+    val track: List<Double> = emptyList(),
+    val autoDrive: AutoDriveData? = null,
 ) {
+    val trackPoints: List<GeoPoint> get() = track.chunked(2).filter { it.size == 2 }.map { GeoPoint(it[0], it[1]) }
+
     val privateZones: Set<String> get() = route.filter { it.privateZone }.map { Zone.idOf(it.point) }.toSet()
 
     fun seedAsLetters(nowMillis: Long): List<MusicLetter> = seedLetters.map {

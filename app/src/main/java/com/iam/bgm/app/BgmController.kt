@@ -49,6 +49,8 @@ data class UiState(
     val pastDiaries: List<DiaryEntry> = emptyList(),
     /** 지도 표시용: 구간 id → 나에게 아직 닿지 않은 다른 사람의 노래 수(개수만). */
     val zoneLetterCounts: Map<String, Int> = emptyMap(),
+    /** 내 차의 현재 위치(내 화면 표시용, 저장·공유하지 않는다). */
+    val position: GeoPoint? = null,
     val helpLine: String? = null,
     val ambientApplied: Boolean? = null,
     val portLabels: List<String> = emptyList(),
@@ -148,7 +150,8 @@ class BgmController(
 
     fun onLocation(p: GeoPoint) {
         val z = Zone.idOf(p)
-        if (z == zoneId) return
+        if (z == zoneId) { _state.value = _state.value.copy(position = p); return }
+        _state.value = _state.value.copy(position = p)
         zoneId = z
         publish()
         onZoneEntered(z)

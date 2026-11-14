@@ -92,6 +92,8 @@ fun MusicMap(
     route: List<RoutePoint>,
     map: MapData,
     osm: OsmMap?,
+    track: List<GeoPoint>,
+    position: GeoPoint?,
     pins: List<MapPin>,
     currentZone: String?,
     offerZone: String?,
@@ -133,8 +135,10 @@ fun MusicMap(
                 }
                 val trunks = osm?.roads.orEmpty().filter { it.c != "p" }.map { pr.path(it.pts) }
                 val primaries = osm?.roads.orEmpty().filter { it.c == "p" }.map { pr.path(it.pts) }
+                // 출퇴근 경로: 실제 도로 경로(track)가 있으면 그것을, 없으면 시나리오 지점을 잇는다
+                val routePts = track.ifEmpty { route.map { it.point } }
                 val routePath = Path().apply {
-                    route.forEachIndexed { i, r -> val o = pr.px(r.point); if (i == 0) moveTo(o.x, o.y) else lineTo(o.x, o.y) }
+                    routePts.forEachIndexed { i, p -> val o = pr.px(p); if (i == 0) moveTo(o.x, o.y) else lineTo(o.x, o.y) }
                 }
                 val labels = if (!detail) emptyList() else
                     map.landmarks.filter { Zone.idOf(it.point) !in privateZones && nearestPin(it.point, pinZones) == null }
@@ -210,9 +214,9 @@ fun MusicMap(
                 if (p.received) drawCircle(PinViolet, radius = 22 * u, center = o, style = Stroke(2.5f * u))
                 if (detail && p.zoneId == selected) drawCircle(Color.White, radius = 32 * u, center = o, style = Stroke(2.5f * u))
             }
-            // 현재 위치(구간 중심 — 지도도 500m 단위로만 위치를 다룬다)
-            currentZone?.let { z ->
-                val o = pr.px(Zone.centerOf(z))
+            // 내 차: 실제 위치(내 화면에만 표시, 저장·공유하지 않음). 위치가 없으면 구간 중심.
+            (position ?: currentZone?.let { Zone.centerOf(it) })?.let { p ->
+                val o = pr.px(p)
                 drawCircle(Color.White.copy(alpha = 0.35f * (1 - pulse)), radius = (10 + 22 * pulse) * u, center = o)
                 car(o, u)
             }

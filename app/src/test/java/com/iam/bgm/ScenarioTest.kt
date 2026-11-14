@@ -91,7 +91,7 @@ class ScenarioTest {
         c.onGear(Gear.DRIVE)
         c.onLocation(point("office"))
         c.onUserSpeech(b.lines[0]); c.onUserSpeech(b.lines[1])
-        c.onLocation(point("downtown")) // 시드 편지(분노 테마)는 B와 결이 달라 제안되지 않아야 한다
+        c.onLocation(point("downtown")) // 서울역 시드 편지(밝은 테마)는 B와 결이 달라 제안되지 않아야 한다
         assertNull(c.state.value.pendingOffer)
         c.onLocation(point("riverside"))
         val offer = assertNotNullAnd(c.state.value.pendingOffer)

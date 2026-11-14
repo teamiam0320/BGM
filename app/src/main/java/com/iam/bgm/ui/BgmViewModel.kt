@@ -2,6 +2,13 @@ package com.iam.bgm.ui
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import com.iam.bgm.app.AutoDrive
+import com.iam.bgm.app.DriveAction
+import com.iam.bgm.app.DriveEnv
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import com.iam.bgm.app.BgmController
 import com.iam.bgm.app.ManualLocationGate
 import com.iam.bgm.app.ManualVehicleGate
@@ -25,6 +32,8 @@ data class ConsoleState(
     val routeIndex: Int?,
     val nextLine: Int,
     val clockLabel: String,
+    /** 자동 주행 진행률(0~1). null이면 자동 주행 중이 아님. */
+    val autoProgress: Double? = null,
 )
 
 class BgmViewModel(app: Application) : AndroidViewModel(app) {
@@ -77,12 +86,53 @@ class BgmViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun resetDemo() {
+        stopAutoDrive()
         vehicle.inject(Gear.PARK)
         vehicle.release()
         location.release()
         store.reset()
         store.saveLetters(data.scenario.seedAsLetters(clock.nowMillis()))
         selectDriver(data.scenario.drivers.first(), 0)
+    }
+
+    private var autoJob: Job? = null
+
+    /**
+     * 자동 주행: 실제 도로 경로를 따라 차를 움직이며 타임라인대로 기어·발화를 주입한다.
+     * 콘솔 버튼과 같은 경로(위치 게이트·기어 게이트·발화 주입)를 쓰므로 컨트롤러는 실차와 같은 흐름을 탄다.
+     */
+    fun startAutoDrive() {
+        val auto = data.scenario.autoDrive ?: return
+        val timeline = auto.drivers[_console.value.driver.id] ?: return
+        if (autoJob?.isActive == true || controller.state.value.mode != com.iam.bgm.core.DriveMode.PARKED) return
+        val drive = AutoDrive(data.scenario.trackPoints, timeline)
+        val env = object : DriveEnv {
+            override val voiceBusy get() = voice.isSpeaking
+            override val offerPending get() = controller.state.value.pendingOffer != null
+            override fun canEnter(zoneId: String) = !(voice.isSpeaking && (controller.state.value.zoneLetterCounts[zoneId] ?: 0) > 0)
+        }
+        val tickMs = 100L
+        val df = tickMs / 1000.0 / auto.simSeconds
+        autoJob = viewModelScope.launch {
+            var lastMinute = 0L
+            while (!drive.done) {
+                for (a in drive.step(df, env)) when (a) {
+                    is DriveAction.Move -> location.inject(a.p)
+                    is DriveAction.SetGear -> vehicle.inject(if (a.gear == "D") Gear.DRIVE else Gear.PARK)
+                    is DriveAction.Say -> sayLine(a.line)
+                }
+                val m = (drive.progress * drive.tripMinutes).toLong()
+                if (m > lastMinute) { clock.advanceMinutes(m - lastMinute); lastMinute = m }
+                _console.value = _console.value.copy(autoProgress = drive.progress, clockLabel = clock.label())
+                delay(tickMs)
+            }
+            _console.value = _console.value.copy(autoProgress = null)
+        }
+    }
+
+    fun stopAutoDrive() {
+        autoJob?.cancel(); autoJob = null
+        _console.value = _console.value.copy(autoProgress = null)
     }
 
     private fun refresh() { _console.value = _console.value.copy(clockLabel = clock.label()) }
