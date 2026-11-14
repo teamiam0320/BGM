@@ -39,6 +39,7 @@ class AssetData(context: Context) {
     val catalog: BgmCatalog = BgmJson.decodeFromString(text("bgm_catalog.json"))
     val dialogue: Dialogue = BgmJson.decodeFromString(text("dialogue.json"))
     val policy: ContentPolicy = BgmJson.decodeFromString(text("content_policy.json"))
+    val osm: OsmMap? = runCatching { BgmJson.decodeFromString<OsmMap>(text("osm_map.json")) }.getOrNull()
     val scenario: DemoScenario = BgmJson.decodeFromString(text("demo_scenario.json"))
 }
 
@@ -61,7 +62,23 @@ data class Landmark(val label: String, val lat: Double, val lng: Double) {
     val point get() = GeoPoint(lat, lng)
 }
 
-/** 시연용 단순화 지도 데이터. river = 한강 중심선 [lat, lng] 목록. */
+/**
+ * OpenStreetMap에서 받은 실제 도로·물길·공원(경로 일대, 단순화). pts = [lat, lng, lat, lng, ...].
+ * 출처 표시 의무(ODbL): 지도에 [attribution]을 표시한다. 생성: tools/osm_build.py
+ */
+@Serializable
+data class OsmMap(
+    val attribution: String,
+    val roads: List<OsmLine> = emptyList(),
+    val water: List<OsmWater> = emptyList(),
+    val parks: List<OsmArea> = emptyList(),
+)
+
+@Serializable data class OsmLine(val c: String, val pts: List<Double>)
+@Serializable data class OsmWater(val w: Double, val name: String = "", val pts: List<Double>)
+@Serializable data class OsmArea(val name: String = "", val pts: List<Double>)
+
+/** 시연용 단순화 지도 데이터. river = 한강 중심선 [lat, lng] 목록(OSM 데이터가 없을 때의 대체). */
 @Serializable
 data class MapData(val river: List<List<Double>> = emptyList(), val landmarks: List<Landmark> = emptyList())
 

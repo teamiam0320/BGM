@@ -162,7 +162,7 @@ private fun DrivingScreen(s: UiState, vm: BgmViewModel) {
         // 흘끗 보는 지도: 글자 없이 경로·내 위치·노래가 있는 구간의 빛나는 점만. 노래 내용은 음성으로만.
         Box(Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(Color(0xFF0D1426)).border(1.dp, Hair, RoundedCornerShape(28.dp))) {
             MusicMap(
-                route = vm.data.scenario.route, map = vm.data.scenario.map, pins = pinsOf(s),
+                route = vm.data.scenario.route, map = vm.data.scenario.map, osm = vm.data.osm, pins = pinsOf(s),
                 currentZone = s.zoneId, offerZone = s.pendingOffer?.letter?.zoneId,
                 detail = false, selected = null, onSelect = {}, modifier = Modifier.fillMaxSize(),
             )
@@ -357,7 +357,7 @@ private fun HomeMap(s: UiState, vm: BgmViewModel) {
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(20.dp)) {
         Box(Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(32.dp)).background(Color(0xFF0D1426)).border(1.dp, Hair, RoundedCornerShape(32.dp))) {
             MusicMap(
-                route = vm.data.scenario.route, map = vm.data.scenario.map, pins = pins,
+                route = vm.data.scenario.route, map = vm.data.scenario.map, osm = vm.data.osm, pins = pins,
                 currentZone = s.zoneId, offerZone = null, detail = true, selected = selected,
                 onSelect = { selected = it }, modifier = Modifier.fillMaxSize(),
             )
