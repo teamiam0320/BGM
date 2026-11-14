@@ -154,6 +154,20 @@ class LetterMatcher(
             .firstOrNull()?.first
     }
 
+    /**
+     * 지도 표시용: 구간별로 나에게 아직 닿지 않은 다른 사람의 노래 수. 곡명·한마디는 노출하지 않는다
+     * (노래는 그 길을 지날 때 음성으로만 공개된다). 만료 기준은 [match]와 같다.
+     */
+    fun waitingCountsByZone(
+        me: String,
+        letters: List<MusicLetter>,
+        alreadyReceived: Set<String>,
+        nowMillis: Long,
+    ): Map<String, Int> = letters.asSequence()
+        .filter { it.authorId != me && it.id !in alreadyReceived }
+        .filter { nowMillis - it.createdAtMillis in 0..maxAgeMillis }
+        .groupingBy { it.zoneId }.eachCount()
+
     /** 집·회사(사적 구간) 근처에서는 남기기를 막는다. */
     fun canLeaveAt(zoneId: String, privateZones: Collection<String>): Boolean =
         privateZones.none { Zone.isNear(it, zoneId) }

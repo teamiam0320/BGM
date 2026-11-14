@@ -47,6 +47,8 @@ data class UiState(
     val myLetters: List<MusicLetter> = emptyList(),
     /** 이 운전자의 지난 일기(최신순). 홈 화면 표시용. */
     val pastDiaries: List<DiaryEntry> = emptyList(),
+    /** 지도 표시용: 구간 id → 나에게 아직 닿지 않은 다른 사람의 노래 수(개수만). */
+    val zoneLetterCounts: Map<String, Int> = emptyMap(),
     val helpLine: String? = null,
     val ambientApplied: Boolean? = null,
     val portLabels: List<String> = emptyList(),
@@ -368,6 +370,7 @@ class BgmController(
             receivedThisTrip = receivedThisTrip.toList(),
             myLetters = store.letters().filter { it.authorId == driverId },
             pastDiaries = store.diaries().filter { it.authorId == driverId }.sortedByDescending { it.createdAtMillis },
+            zoneLetterCounts = matcher.waitingCountsByZone(driverId, store.letters(), store.received(driverId), time.nowMillis()),
         )
     }
 

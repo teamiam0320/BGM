@@ -57,11 +57,21 @@ data class SeedLetter(
 )
 
 @Serializable
+data class Landmark(val label: String, val lat: Double, val lng: Double) {
+    val point get() = GeoPoint(lat, lng)
+}
+
+/** 시연용 단순화 지도 데이터. river = 한강 중심선 [lat, lng] 목록. */
+@Serializable
+data class MapData(val river: List<List<Double>> = emptyList(), val landmarks: List<Landmark> = emptyList())
+
+@Serializable
 data class DemoScenario(
     val version: Int,
     val route: List<RoutePoint>,
     val drivers: List<DemoDriver>,
     val seedLetters: List<SeedLetter>,
+    val map: MapData = MapData(),
 ) {
     val privateZones: Set<String> get() = route.filter { it.privateZone }.map { Zone.idOf(it.point) }.toSet()
 

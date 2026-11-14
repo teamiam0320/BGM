@@ -106,7 +106,7 @@ fun BgmApp(vm: BgmViewModel) {
             Column(Modifier.fillMaxSize()) {
                 TopBar(s, vm, consoleOpen) { consoleOpen = !consoleOpen }
                 Crossfade(targetState = s.mode == DriveMode.DRIVING, animationSpec = tween(450), label = "mode") { driving ->
-                    if (driving) DrivingScreen(s) else ParkedScreen(s, vm)
+                    if (driving) DrivingScreen(s, vm) else ParkedScreen(s, vm)
                 }
             }
         }
@@ -154,47 +154,24 @@ private fun Pill(text: String, dot: Color) {
 // ---------------- 주행 화면: 음성 전용, 최소 표시 ----------------
 
 @Composable
-private fun DrivingScreen(s: UiState) {
+private fun DrivingScreen(s: UiState, vm: BgmViewModel) {
     Column(
-        Modifier.fillMaxSize().padding(start = 64.dp, end = 64.dp, top = 8.dp, bottom = 40.dp),
+        Modifier.fillMaxSize().padding(start = 48.dp, end = 48.dp, top = 8.dp, bottom = 40.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-            AmiOrb(listening = s.listening, size = 230.dp)
+        // 흘끗 보는 지도: 글자 없이 경로·내 위치·노래가 있는 구간의 빛나는 점만. 노래 내용은 음성으로만.
+        Box(Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(Color(0xFF0D1426)).border(1.dp, Hair, RoundedCornerShape(28.dp))) {
+            MusicMap(
+                route = vm.data.scenario.route, map = vm.data.scenario.map, pins = pinsOf(s),
+                currentZone = s.zoneId, offerZone = s.pendingOffer?.letter?.zoneId,
+                detail = false, selected = null, onSelect = {}, modifier = Modifier.fillMaxSize(),
+            )
+            ListenBadge(s.listening, Modifier.align(Alignment.TopStart).padding(20.dp))
         }
+        Spacer(Modifier.height(24.dp))
         Transcript(s.captions)
         Spacer(Modifier.height(32.dp))
         s.pendingOffer?.let { OfferBanner(it) } ?: NowPlaying(s.nowPlaying)
-    }
-}
-
-/** 듣는 중에는 바깥으로 퍼지는 물결, 말하는 중에는 잔잔한 숨쉬기. */
-@Composable
-private fun AmiOrb(listening: Boolean, size: Dp) {
-    val t = rememberInfiniteTransition(label = "orb")
-    val breathe by t.animateFloat(1f, if (listening) 1.06f else 1.03f, infiniteRepeatable(tween(1400), RepeatMode.Reverse), label = "breathe")
-    val ripple by t.animateFloat(0f, 1f, infiniteRepeatable(tween(2200, easing = LinearEasing)), label = "ripple")
-    Box(contentAlignment = Alignment.Center) {
-        Canvas(Modifier.size(size * 1.9f)) {
-            val r0 = size.toPx() / 2f
-            if (listening) {
-                for (k in 0..1) {
-                    val p = (ripple + k * 0.5f) % 1f
-                    drawCircle(Accent.copy(alpha = 0.35f * (1f - p)), radius = r0 * (1f + 0.75f * p), style = Stroke(3.dp.toPx()))
-                }
-            }
-            drawCircle(Brush.radialGradient(listOf(Accent.copy(alpha = 0.28f), Color.Transparent), radius = r0 * 1.8f), radius = r0 * 1.8f)
-        }
-        Box(
-            Modifier.size(size).scale(breathe).clip(CircleShape)
-                .background(Brush.radialGradient(listOf(Color(0xFFB9D0FF), Accent, Color(0xFF2E4A92)))),
-            contentAlignment = Alignment.Center,
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(if (listening) "듣고 있어요" else "에이미", color = Color.White, fontSize = 32.sp, fontWeight = FontWeight.Bold)
-                if (listening) Text("말씀하세요", color = Color.White.copy(alpha = 0.75f), fontSize = 17.sp)
-            }
-        }
     }
 }
 
@@ -289,14 +266,15 @@ private fun ParkedScreen(s: UiState, vm: BgmViewModel) {
         Modifier.fillMaxSize().padding(start = 48.dp, end = 48.dp, top = 16.dp, bottom = 40.dp),
         horizontalArrangement = Arrangement.spacedBy(28.dp),
     ) {
+        if (diary == null) { HomeMap(s, vm); return@Row }
         Box(Modifier.weight(1.3f).fillMaxHeight()) {
-            if (diary == null) WelcomePanel() else DiaryPanel(diary, s.diaryMood, s.helpLine)
+            DiaryPanel(diary, s.diaryMood, s.helpLine)
         }
         Column(
             Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
-            if (diary != null) {
+            run {
                 s.diaryMood?.let { MoodCard(it, s.ambientApplied) }
                 Card("오늘의 일기 BGM") {
                     diary.bgmTrackIds.mapNotNull { vm.data.catalog.track(it) }.forEach { t ->
@@ -310,48 +288,8 @@ private fun ParkedScreen(s: UiState, vm: BgmViewModel) {
                         }
                     }
                 }
-            } else {
-                PastDiaries(s.pastDiaries, vm)
-                LetterIntro()
             }
             if (s.myLetters.isNotEmpty()) MyLetters(s, vm)
-        }
-    }
-}
-
-@Composable
-private fun WelcomePanel() {
-    Column(
-        Modifier.fillMaxSize().clip(RoundedCornerShape(32.dp))
-            .background(Brush.linearGradient(listOf(Color(0xFF1C2A4D), Color(0xFF121A30))))
-            .border(1.dp, Hair, RoundedCornerShape(32.dp)).padding(44.dp),
-    ) {
-        Text("퇴근길 30분,", color = TextHi, fontSize = 46.sp, fontWeight = FontWeight.Bold, lineHeight = 58.sp)
-        Text("마음을 내려놓는 차", color = Accent, fontSize = 46.sp, fontWeight = FontWeight.Bold, lineHeight = 58.sp)
-        Spacer(Modifier.height(18.dp))
-        Text("에이미에게 하루를 털어놓으면, 도착할 때 일기와 그날의 BGM이 완성돼요.", color = Soft, fontSize = 22.sp, lineHeight = 34.sp)
-        Spacer(Modifier.weight(1f))
-        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Step("D", "시동 걸고 출발", "에이미가 먼저 그날의 질문을 건네요")
-            Step("말", "음성으로 털어놓기", "운전 중엔 화면을 보지 않아도 돼요")
-            Step("P", "주차하면 완성", "오늘의 일기 · 마음 날씨 · 일기 BGM")
-        }
-    }
-}
-
-@Composable
-private fun Step(badge: String, title: String, sub: String) {
-    Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Glass).padding(horizontal = 20.dp, vertical = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(Modifier.size(48.dp).clip(CircleShape).background(Accent.copy(alpha = 0.18f)), contentAlignment = Alignment.Center) {
-            Text(badge, color = Accent, fontSize = 21.sp, fontWeight = FontWeight.Bold)
-        }
-        Spacer(Modifier.width(18.dp))
-        Column {
-            Text(title, color = TextHi, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
-            Text(sub, color = Dim, fontSize = 17.sp)
         }
     }
 }
@@ -375,6 +313,106 @@ private fun LetterIntro() {
         Text("지금 듣는 노래와 한마디를 이 길에 남기면, 비슷한 하루를 보낸 누군가가 같은 길을 지날 때 위로로 받아요.", color = Soft, fontSize = 19.sp, lineHeight = 29.sp)
         Spacer(Modifier.height(12.dp))
         Text("위치는 500m 구간으로만 저장 · 집·회사 근처는 제외", color = Dim, fontSize = 16.sp)
+    }
+}
+
+/** 지도에 찍을 구간: 다른 사람 노래가 기다리는 곳(개수만), 내가 남긴 곳, 이번 주행에 받은 곳. */
+private fun pinsOf(s: UiState): List<MapPin> {
+    val received = s.receivedThisTrip.map { it.letter.zoneId }.toSet()
+    val zones = s.zoneLetterCounts.keys + s.myLetters.map { it.zoneId } + received
+    return zones.map { z ->
+        val mine = s.myLetters.filter { it.zoneId == z }
+        MapPin(z, s.zoneLetterCounts[z] ?: 0, mine.size, mine.any { it.thankedBy.isNotEmpty() }, z in received)
+    }
+}
+
+/** 구간 id에 가장 가까운 지명. 상세 카드 이름으로 쓰며 정확한 위치는 드러내지 않는다. */
+private fun zoneName(zoneId: String, vm: BgmViewModel): String {
+    val c = Zone.centerOf(zoneId)
+    val named = vm.data.scenario.map.landmarks.map { it.label to it.point }
+    val best = named.minByOrNull { (_, p) -> (p.lat - c.lat) * (p.lat - c.lat) + (p.lng - c.lng) * (p.lng - c.lng) }
+    return best?.first ?: "이 구간"
+}
+
+@Composable
+private fun ListenBadge(listening: Boolean, modifier: Modifier) {
+    val t = rememberInfiniteTransition(label = "listen")
+    val k by t.animateFloat(0.4f, 1f, infiniteRepeatable(tween(700), RepeatMode.Reverse), label = "k")
+    Row(
+        modifier.clip(RoundedCornerShape(50)).background(Color(0xCC0A0F1C)).border(1.dp, Hair, RoundedCornerShape(50))
+            .padding(horizontal = 18.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(14.dp).scale(if (listening) k else 1f).clip(CircleShape).background(if (listening) Live else Accent))
+        Spacer(Modifier.width(10.dp))
+        Text(if (listening) "듣고 있어요" else "에이미", color = TextHi, fontSize = 19.sp, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+/** 주차 중 기본 화면: 음악 지도. 다른 사람 노래는 곡 수만, 내 노래는 상태까지. */
+@Composable
+private fun HomeMap(s: UiState, vm: BgmViewModel) {
+    var selected by remember { mutableStateOf<String?>(null) }
+    val pins = pinsOf(s)
+    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+        Box(Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(32.dp)).background(Color(0xFF0D1426)).border(1.dp, Hair, RoundedCornerShape(32.dp))) {
+            MusicMap(
+                route = vm.data.scenario.route, map = vm.data.scenario.map, pins = pins,
+                currentZone = s.zoneId, offerZone = null, detail = true, selected = selected,
+                onSelect = { selected = it }, modifier = Modifier.fillMaxSize(),
+            )
+            Column(Modifier.align(Alignment.TopStart).padding(28.dp)) {
+                Text("음악 지도", color = TextHi, fontSize = 30.sp, fontWeight = FontWeight.Bold)
+                Text("노래가 기다리는 길 · 지나갈 때 에이미가 들려줘요", color = Soft, fontSize = 18.sp)
+            }
+            Row(Modifier.align(Alignment.BottomStart).padding(24.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(14.dp).clip(CircleShape).background(Violet))
+                Text("  기다리는 노래(곡 수)", color = Soft, fontSize = 16.sp)
+                Spacer(Modifier.width(20.dp))
+                Box(Modifier.size(14.dp).clip(CircleShape).border(2.dp, Accent, CircleShape))
+                Text("  내가 남긴 노래", color = Soft, fontSize = 16.sp)
+            }
+            Text(
+                "기어를 D로 바꾸면 에이미가 먼저 말을 걸어요",
+                color = Accent, fontSize = 17.sp,
+                modifier = Modifier.align(Alignment.BottomEnd).padding(24.dp),
+            )
+        }
+        Row(Modifier.fillMaxWidth().height(300.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+            Box(Modifier.weight(1f).fillMaxHeight()) {
+                val z = selected
+                if (z == null) LetterIntro() else ZoneDetail(z, s, vm)
+            }
+            Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                if (s.myLetters.isNotEmpty()) MyLetters(s, vm)
+                PastDiaries(s.pastDiaries, vm)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ZoneDetail(zoneId: String, s: UiState, vm: BgmViewModel) {
+    val waiting = s.zoneLetterCounts[zoneId] ?: 0
+    val mine = s.myLetters.filter { it.zoneId == zoneId }
+    Column(
+        Modifier.fillMaxSize().clip(RoundedCornerShape(28.dp)).background(Glass).border(1.dp, Hair, RoundedCornerShape(28.dp)).padding(28.dp)
+            .verticalScroll(rememberScrollState()),
+    ) {
+        Text("${zoneName(zoneId, vm)} 부근", color = TextHi, fontSize = 26.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(12.dp))
+        if (waiting > 0) {
+            Text("이 길에서 노래 ${waiting}곡이 기다리고 있어요", color = Violet, fontSize = 21.sp, fontWeight = FontWeight.SemiBold)
+            Text("어떤 노래인지는 비슷한 하루를 보낸 날 이 길을 지나면 에이미가 들려줘요.", color = Soft, fontSize = 18.sp, lineHeight = 27.sp)
+        } else if (mine.isEmpty()) {
+            Text("아직 이 길에 남겨진 노래가 없어요", color = Soft, fontSize = 19.sp)
+        }
+        mine.forEach { l ->
+            Spacer(Modifier.height(14.dp))
+            val t = vm.data.catalog.track(l.trackId)
+            Text("내 노래 · ${t?.title ?: l.trackId}", color = Accent, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+            Text("“${l.message}” · ${if (l.thankedBy.isEmpty()) "닿기를 기다리는 중" else "${l.thankedBy.size}명에게 닿았어요"}", color = Soft, fontSize = 17.sp)
+        }
     }
 }
 

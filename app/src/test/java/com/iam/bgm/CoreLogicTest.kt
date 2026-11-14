@@ -108,6 +108,22 @@ class CoreLogicTest {
         assertTrue(m.canLeaveAt("5:5", listOf("7:7")))
     }
 
+    /** 지도에는 내 것·이미 받은 것·만료된 것을 뺀 다른 사람 노래의 '개수'만 나간다. */
+    @Test fun waitingCountsExcludeMineReceivedAndExpired() {
+        val now = 100L * 86_400_000L
+        val t = mapOf("joy" to 1.0)
+        val letters = listOf(
+            letter("mine", "1:1", "me", t, now),
+            letter("a", "1:1", "x", t, now),
+            letter("b", "1:1", "y", t, now - 1000),
+            letter("received", "1:1", "z", t, now),
+            letter("expired", "2:2", "x", t, now - 31L * 86_400_000L),
+            letter("c", "3:3", "x", t, now),
+        )
+        val counts = LetterMatcher().waitingCountsByZone("me", letters, setOf("received"), now)
+        assertEquals(mapOf("1:1" to 2, "3:3" to 1), counts)
+    }
+
     @Test fun speechGateDefersNearTurns() {
         assertTrue(SpeechGate.canOffer(null, ttsBusy = false))
         assertFalse(SpeechGate.canOffer(120, ttsBusy = false))
