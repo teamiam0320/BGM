@@ -8,3 +8,6 @@ keystore.properties
 *.keystore
 .idea/
 *.iml
+
+# 로컬 Obsidian 작업기록(자동 생성, 저장소에 넣지 않음)
+obsidian/
