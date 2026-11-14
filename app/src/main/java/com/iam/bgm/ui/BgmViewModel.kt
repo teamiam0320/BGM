@@ -38,6 +38,8 @@ data class ConsoleState(
     val freeDrive: Boolean = false,
     val freeSpeedKmh: Double = 60.0,
     val freeTarget: com.iam.bgm.core.GeoPoint? = null,
+    /** 자유 주행 경로(도로 위 점 목록). 지도에 표시한다. */
+    val freeRoute: List<com.iam.bgm.core.GeoPoint> = emptyList(),
 )
 
 class BgmViewModel(app: Application) : AndroidViewModel(app) {
@@ -155,7 +157,7 @@ class BgmViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun setFreeDrive(on: Boolean) {
-        _console.value = _console.value.copy(freeDrive = on, freeTarget = if (on) _console.value.freeTarget else null)
+        _console.value = _console.value.copy(freeDrive = on, freeTarget = if (on) _console.value.freeTarget else null, freeRoute = if (on) _console.value.freeRoute else emptyList())
         if (!on) { freeJob?.cancel(); controller.onSpeed(0.0) }
     }
 
@@ -167,34 +169,40 @@ class BgmViewModel(app: Application) : AndroidViewModel(app) {
     private var freeJob: Job? = null
 
     /**
-     * 자유 주행: 지금 위치에서 누른 곳까지 직선으로 달린다(도로는 따르지 않음).
+     * 자유 주행: 지금 위치에서 누른 곳까지 **도로를 따라** 달린다(앱 안 도로 그래프로 길찾기, 네트워크 불필요).
+     * 출발·도착은 가까운 도로에 붙인다. 도로 그래프가 없거나 길이 없으면 직선으로 간다.
      * 실제 시간보다 [FREE_SIM_X]배 빠르게 움직이고, 시나리오 시계도 같은 비율로 흐른다.
      */
     fun freeDriveTo(target: com.iam.bgm.core.GeoPoint) {
         if (!_console.value.freeDrive || autoJob?.isActive == true) return
-        _console.value = _console.value.copy(freeTarget = target)
+        val start = controller.state.value.position ?: data.scenario.route.first().point
+        val road = data.roads?.route(start, target)
+        val path = if (road != null && road.size >= 2) listOf(start) + road else listOf(start, target)
+        _console.value = _console.value.copy(freeTarget = path.last(), freeRoute = path)
         freeJob?.cancel()
         freeJob = viewModelScope.launch {
             val tickMs = 100L
-            var pos = controller.state.value.position ?: data.scenario.route.first().point
+            var seg = 0
+            var pos = path.first()
             var simSeconds = 0.0
             controller.onSpeed(_console.value.freeSpeedKmh)
-            while (true) {
-                val kmh = _console.value.freeSpeedKmh
-                val step = kmh / 3.6 * (tickMs / 1000.0) * FREE_SIM_X
-                val dist = com.iam.bgm.core.Zone.metersBetween(pos, target)
-                pos = if (dist <= step || step <= 0.0 && dist < 1.0) target
-                else if (step <= 0.0) pos
-                else com.iam.bgm.core.GeoPoint(pos.lat + (target.lat - pos.lat) * step / dist, pos.lng + (target.lng - pos.lng) * step / dist)
+            while (seg < path.size - 1) {
+                var step = _console.value.freeSpeedKmh / 3.6 * (tickMs / 1000.0) * FREE_SIM_X
+                // 이번 틱에 갈 거리만큼 경로 점을 따라 나아간다(구간 경계를 넘을 수 있음)
+                while (step > 0 && seg < path.size - 1) {
+                    val next = path[seg + 1]
+                    val d = com.iam.bgm.core.Zone.metersBetween(pos, next)
+                    if (d <= step) { pos = next; step -= d; seg++ }
+                    else { pos = com.iam.bgm.core.GeoPoint(pos.lat + (next.lat - pos.lat) * step / d, pos.lng + (next.lng - pos.lng) * step / d); step = 0.0 }
+                }
                 location.inject(pos)
                 simSeconds += tickMs / 1000.0 * FREE_SIM_X
                 if (simSeconds >= 60) { clock.advanceMinutes((simSeconds / 60).toLong()); simSeconds %= 60 }
                 refresh()
-                if (pos == target) break
                 delay(tickMs)
             }
             controller.onSpeed(0.0)
-            _console.value = _console.value.copy(freeTarget = null)
+            _console.value = _console.value.copy(freeTarget = null, freeRoute = emptyList())
         }
     }
 

@@ -407,7 +407,7 @@ private fun DrivingScreen(s: UiState, vm: BgmViewModel, c: ConsoleState, map3d: 
                 route = vm.data.scenario.route, map = vm.data.scenario.map, osm = vm.data.osm, track = vm.data.scenario.trackPoints, position = s.position, pins = pinsOf(s),
                 currentZone = s.zoneId, offerZone = s.pendingOffer?.letter?.zoneId,
                 detail = false, selected = null, onSelect = {}, modifier = Modifier.fillMaxSize(), tilt3d = map3d, pickupRadiusM = s.pickupRadiusM,
-                onTapGeo = if (c.freeDrive) { g -> vm.freeDriveTo(g) } else null, destination = c.freeTarget,
+                onTapGeo = if (c.freeDrive) { g -> vm.freeDriveTo(g) } else null, destination = c.freeTarget, plannedRoute = c.freeRoute,
             )
             ListenBadge(s.listening, Modifier.align(Alignment.TopStart).padding(20.dp))
             ViewToggle(map3d, onToggle3d, Modifier.align(Alignment.TopEnd).padding(top = 36.dp, end = 20.dp))

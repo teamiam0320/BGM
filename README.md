@@ -41,7 +41,7 @@ adb shell am start -n com.iam.bgm/.MainActivity
 ### 2) 소스에서 빌드
 
 ```bash
-./gradlew :app:testDebugUnitTest   # 단위 테스트 (30개)
+./gradlew :app:testDebugUnitTest   # 단위 테스트 (33개)
 ./gradlew :app:assembleRelease     # app/build/outputs/apk/release/app-release.apk
 ```
 
@@ -95,7 +95,7 @@ adb shell am start -n com.iam.bgm/.MainActivity
 시연 콘솔 아래쪽 **5. 자유 테스트**에서 정해진 시나리오 밖의 상황을 시험할 수 있습니다(D 주행 상태에서).
 
 - **아무 문장이나 말하기:** 입력창에 쓴 문장이 음성 인식 결과처럼 들어갑니다. 감정별 예시 버튼(기쁨·불안·분노·외로움·감사·슬픔·평온·설렘)과 노래 남기기·응·아니·고마워 버튼도 있습니다(`demo_scenario.json`의 `freeLines`).
-- **지도를 눌러 자유 주행:** 켜면 주행 지도(3D·2D 모두)를 누른 곳에 깃발이 꽂히고 차가 그쪽으로 직선으로 달립니다(도로는 따르지 않음, 실제보다 8배 빠르게). 어느 구간에서든 노래 남기기·받기, 집·회사 근처 차단을 시험할 수 있습니다.
+- **지도를 눌러 자유 주행:** 켜면 주행 지도(3D·2D 모두)를 누른 곳까지 **도로를 따라** 달립니다. 앱 안의 도로 그래프(`assets/road_graph.json`, OpenStreetMap 간선·보조간선·연결로 5,853개 교차점, 일방통행 반영, `tools/road_graph_build.py`)에서 최단 경로를 찾아 지도에 흰 선으로 보여 주며, 네트워크가 필요 없습니다. 출발·도착은 가까운 도로에 붙고, 실제보다 8배 빠르게 움직입니다. 어느 구간에서든 노래 남기기·받기, 집·회사 근처 차단을 시험할 수 있습니다.
 - **차속 슬라이더:** 0~120km/h. 수신 반경(차속 × 15초, 200~600m)이 바로 바뀌어 지도의 원으로 보입니다.
 - **실제 마이크:** 에뮬레이터에 PC 마이크를 연결하면(`adb emu avd hostmicon`, 에뮬레이터를 다시 켜면 다시 실행) 아미가 말을 마친 뒤 Pleos SpeechToText SDK로 직접 말할 수 있습니다.
 
@@ -159,7 +159,7 @@ tools/generate_tracks.py   데모 음원 합성기 (저작권 문제 없는 자�
 
 ## 테스트
 
-`./gradlew :app:testDebugUnitTest` — 30개 테스트, 앱이 실제로 쓰는 `assets` JSON을 그대로 읽어 검증합니다.
+`./gradlew :app:testDebugUnitTest` — 33개 테스트, 앱이 실제로 쓰는 `assets` JSON을 그대로 읽어 검증합니다.
 
 | 테스트 | 내용 |
 |---|---|
@@ -167,6 +167,7 @@ tools/generate_tracks.py   데모 음원 합성기 (저작권 문제 없는 자�
 | `ScenarioTest` (6) | 기획서 시나리오 1·2 전체(남기기→주차 일기→받기→고마움→다음 운전 알림 1회), 집·회사 차단, 위기 한마디, 주행 중 터치 무시, 대화 없는 주차 |
 | `LocationGateTest` (2) | 회귀: SDK 위치 갱신이 시연 콘솔로 옮긴 구간을 덮어쓰지 않음 |
 | `AutoDriveTest` (2) | 실제 도로 경로로 자동 주행 전체(A→B): 노래 제안은 B의 강변북로에서 A의 노래 한 번뿐, 경로가 시나리오 지점을 모두 지남 |
+| `RoadGraphTest` (3) | 길찾기: 도로로만 이동, 일방통행 준수·막힌 길 null, 실제 도로 그래프로 회사→집 연결(직선거리의 1~2.5배) |
 | `MapZoomTest` (3) | 두 손가락 확대 시 손가락 사이 지점 고정, 배율 1~6배·이동 범위 제한, 지도 탭 → 위경도 역변환(추적 카메라 포함) |
 | `VehicleGateTest` (2) | 회귀: 차량 서비스 재연결로 SDK가 다시 보낸 기어(P)가 시연 콘솔로 고른 주행(D)을 끝내지 않음 |
 | `ClockMonotonicTest` (1) | 회귀: 작성 시각이 현재보다 늦은 편지는 매칭되지 않음 → 시연 시계는 단조 증가 |

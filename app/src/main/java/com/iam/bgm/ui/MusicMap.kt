@@ -195,6 +195,8 @@ fun MusicMap(
     onTapGeo: ((GeoPoint) -> Unit)? = null,
     /** 자유 주행 목적지 표시 */
     destination: GeoPoint? = null,
+    /** 자유 주행 경로(도로 위) 표시 */
+    plannedRoute: List<GeoPoint> = emptyList(),
 ) {
     val t = rememberInfiniteTransition(label = "map")
     val pulse by t.animateFloat(0f, 1f, infiniteRepeatable(tween(1800, easing = LinearEasing)), label = "pulse")
@@ -387,6 +389,14 @@ fun MusicMap(
                         val g = ground(r.point)
                         if (persp.visible(g)) { val o = persp.map(g); drawCircle(PinBlue.copy(alpha = 0.7f), radius = 7 * u * persp.scaleAt(g).coerceIn(0.25f, 1.4f), center = o, style = Stroke(2 * u)) }
                     }
+                    if (plannedRoute.size >= 2) {
+                        drawIntoCanvas { it.nativeCanvas.save(); it.nativeCanvas.concat(persp.m) }
+                        withTransform({
+                            translate(camera!!.anchor.x, camera.anchor.y); rotate(-camera.headingDeg, pivot = Offset.Zero)
+                            scale(camera.zoom, camera.zoom, pivot = Offset.Zero); translate(-camera.car.x, -camera.car.y)
+                        }) { routeLine(plannedRoute.map { pr.px(it) }, u / camera!!.zoom) }
+                        drawIntoCanvas { it.nativeCanvas.restore() }
+                    }
                     destination?.let { dg -> val g = ground(dg); if (persp.visible(g)) destFlag(persp.map(g), u * persp.scaleAt(g).coerceIn(0.4f, 1.5f)) }
                     // 내 차: 바닥에 붙은 화살표(원근 적용)
                     drawIntoCanvas { it.nativeCanvas.save(); it.nativeCanvas.concat(persp.m) }
@@ -435,6 +445,7 @@ fun MusicMap(
                 }
                 // 내 차: 추적 시점에서는 화면 아래 중앙에 진행 방향 화살표, 2D에서는 점(실제 위치, 저장·공유하지 않음)
                 if (camera != null) {
+                    if (plannedRoute.size >= 2) routeLine(plannedRoute.map { at(it) }, u)
                     destination?.let { destFlag(at(it), u) }
                     pickupRadiusM?.let { pickupRing(camera.anchor, pr.meters(it) * camera.zoom, u) }
                     drawCircle(Color.White.copy(alpha = 0.25f * (1 - pulse)), radius = (16 + 26 * pulse) * u, center = camera.anchor)
@@ -560,6 +571,13 @@ private fun DrawScope.sphere(g: Offset, r: Float, color: Color, glow: Float) {
         Brush.radialGradient(listOf(Color.White, color, dark), center = Offset(c.x - r * 0.38f, c.y - r * 0.42f), radius = r * 1.55f),
         radius = r, center = c,
     )
+}
+
+/** 자유 주행 경로(도로 위): 밝은 선. */
+private fun DrawScope.routeLine(pts: List<Offset>, u: Float) {
+    val p = Path().apply { pts.forEachIndexed { i, o -> if (i == 0) moveTo(o.x, o.y) else lineTo(o.x, o.y) } }
+    drawPath(p, Color.White.copy(alpha = 0.18f), style = Stroke(16 * u, cap = StrokeCap.Round, join = StrokeJoin.Round))
+    drawPath(p, Color(0xFFE8F0FF), style = Stroke(5 * u, cap = StrokeCap.Round, join = StrokeJoin.Round))
 }
 
 /** 자유 주행 목적지 깃발. */

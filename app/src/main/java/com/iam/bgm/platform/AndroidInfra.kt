@@ -41,6 +41,10 @@ class AssetData(context: Context) {
     val dialogue: Dialogue = BgmJson.decodeFromString(text("dialogue.json"))
     val policy: ContentPolicy = BgmJson.decodeFromString(text("content_policy.json"))
     val osm: OsmMap? = runCatching { BgmJson.decodeFromString<OsmMap>(text("osm_map.json")) }.getOrNull()
+    /** 자유 주행 길찾기용 도로 그래프(없으면 직선 주행). */
+    val roads: com.iam.bgm.core.RoadGraph? by lazy {
+        runCatching { BgmJson.decodeFromString<RoadGraphData>(text("road_graph.json")) }.getOrNull()?.let { com.iam.bgm.core.RoadGraph(it.nodes, it.edges) }
+    }
     val scenario: DemoScenario = BgmJson.decodeFromString(text("demo_scenario.json"))
 }
 
@@ -82,6 +86,9 @@ data class OsmMap(
 /** 시연용 단순화 지도 데이터. river = 한강 중심선 [lat, lng] 목록(OSM 데이터가 없을 때의 대체). */
 @Serializable
 data class MapData(val river: List<List<Double>> = emptyList(), val landmarks: List<Landmark> = emptyList())
+
+@Serializable
+data class RoadGraphData(val nodes: List<Double>, val edges: List<Int>)
 
 /** 자유 테스트용 발화 예시(감정별). 콘솔에서 눌러 음성 인식 결과처럼 넣는다. */
 @Serializable
