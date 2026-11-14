@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -62,6 +63,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.iam.bgm.app.Caption
+import com.iam.bgm.app.Nearby
 import com.iam.bgm.app.Offer
 import com.iam.bgm.app.UiState
 import com.iam.bgm.core.DiaryEntry
@@ -410,6 +412,7 @@ private fun DrivingScreen(s: UiState, vm: BgmViewModel, c: ConsoleState, map3d: 
                 onTapGeo = if (c.freeDrive) { g -> vm.freeDriveTo(g) } else null, destination = c.freeTarget, plannedRoute = c.freeRoute,
             )
             ListenBadge(s.listening, Modifier.align(Alignment.TopStart).padding(20.dp))
+            NearbyCard(s.pendingOffer, s.nearby, Modifier.align(Alignment.BottomStart).padding(20.dp))
             ViewToggle(map3d, onToggle3d, Modifier.align(Alignment.TopEnd).padding(top = 36.dp, end = 20.dp))
         }
         Spacer(Modifier.height(24.dp))
@@ -435,6 +438,41 @@ private fun Transcript(captions: List<Caption>) {
             Text("아미", color = Accent, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(4.dp))
             Text(lastAmi, color = TextHi, fontSize = 36.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, maxLines = 3, lineHeight = 48.sp)
+        }
+    }
+}
+
+/**
+ * 수신 반경 안에 들어온 다른 사람의 노래(주행 지도 왼쪽 아래). 흘끗 볼 정도로 짧게: 곡명·가수·거리, 한마디는 한 줄.
+ * 아미가 소개 중인 노래가 있으면 그것을 맨 위에 둔다. 반경 안에 노래가 없으면 표시하지 않는다.
+ */
+@Composable
+private fun NearbyCard(offer: Offer?, nearby: List<Nearby>, modifier: Modifier = Modifier) {
+    val top = offer?.let { o -> Nearby(o.letter, o.track, nearby.firstOrNull { it.letter.id == o.letter.id }?.meters ?: -1.0) } ?: nearby.firstOrNull()
+    androidx.compose.animation.AnimatedVisibility(
+        visible = top != null, modifier = modifier,
+        enter = androidx.compose.animation.fadeIn(tween(250)) + androidx.compose.animation.slideInHorizontally(tween(250)) { -it / 4 },
+        exit = androidx.compose.animation.fadeOut(tween(200)),
+    ) {
+        val n = top ?: return@AnimatedVisibility
+        val more = nearby.count { it.letter.id != n.letter.id }
+        val presenting = offer?.letter?.id == n.letter.id
+        Column(
+            Modifier.widthIn(max = 380.dp).clip(RoundedCornerShape(22.dp)).background(Color(0xE6161E36))
+                .border(1.5.dp, Violet.copy(alpha = if (presenting) 0.9f else 0.45f), RoundedCornerShape(22.dp)).padding(horizontal = 20.dp, vertical = 16.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(10.dp).clip(CircleShape).background(Violet))
+                Spacer(Modifier.width(8.dp))
+                Text(if (presenting) "아미가 소개하는 중" else "반경 안에 들어온 노래", color = Violet, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                if (n.meters >= 0) { Spacer(Modifier.width(8.dp)); Text("${(n.meters / 10).toInt() * 10}m", color = Dim, fontSize = 15.sp) }
+            }
+            Spacer(Modifier.height(6.dp))
+            Text(n.track.title, color = TextHi, fontSize = 24.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(n.track.artist, color = Soft, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Spacer(Modifier.height(6.dp))
+            Text("“${n.letter.message}”", color = Soft, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (more > 0) { Spacer(Modifier.height(6.dp)); Text("근처에 ${more}곡 더", color = Dim, fontSize = 15.sp) }
         }
     }
 }

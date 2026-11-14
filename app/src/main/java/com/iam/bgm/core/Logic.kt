@@ -181,8 +181,31 @@ class LetterMatcher(
     }
 
     /**
+     * 주행 중 '지금 반경 안의 노래': 같은 구간이거나 구간 중심이 반경 안인, 나에게 아직 닿지 않은 다른 사람의 노래.
+     * 결 매칭과 무관하게 보여 준다(제안은 [matchNear]가 따로 고른다). 가까운 순, 같으면 최신·id 순.
+     * 거리는 구간 중심까지(위치는 구간 단위로만 저장되므로).
+     */
+    fun inRange(
+        position: GeoPoint,
+        radiusMeters: Double,
+        me: String,
+        letters: List<MusicLetter>,
+        alreadyReceived: Set<String>,
+        nowMillis: Long,
+    ): List<Pair<MusicLetter, Double>> {
+        val here = Zone.idOf(position)
+        return letters.asSequence()
+            .filter { it.authorId != me && it.id !in alreadyReceived }
+            .filter { nowMillis - it.createdAtMillis in 0..maxAgeMillis }
+            .map { it to Zone.metersBetween(position, Zone.centerOf(it.zoneId)) }
+            .filter { it.first.zoneId == here || it.second <= radiusMeters }
+            .sortedWith(compareBy<Pair<MusicLetter, Double>> { it.second }.thenByDescending { it.first.createdAtMillis }.thenBy { it.first.id })
+            .toList()
+    }
+
+    /**
      * 지도 표시용: 구간별로 나에게 아직 닿지 않은 다른 사람의 노래 수. 곡명·한마디는 노출하지 않는다
-     * (노래는 그 길을 지날 때 음성으로만 공개된다). 만료 기준은 [match]와 같다.
+     * (곡 정보는 그 길을 지나 수신 반경에 들어왔을 때만 공개된다 — [inRange]). 만료 기준은 [match]와 같다.
      */
     fun waitingCountsByZone(
         me: String,

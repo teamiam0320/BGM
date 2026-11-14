@@ -135,6 +135,27 @@ class CoreLogicTest {
         assertEquals("same", m.matchNear(here, 0.0, me, "me", same, emptySet(), now)?.id)
     }
 
+    /** 주행 지도 카드: 반경 안(또는 같은 구간)의 다른 사람 노래만, 결 매칭과 무관하게, 가까운 순. */
+    @Test fun inRangeListsNearbyLettersByDistance() {
+        val now = 100L * 86_400_000L
+        val here = GeoPoint(37.5300, 127.0000)
+        val hereZone = Zone.idOf(here)
+        val (a, b) = hereZone.split(":").map { it.toLong() }
+        val next = "${a + 1}:$b"
+        val far = "${a + 5}:$b"
+        val r = Zone.metersBetween(here, Zone.centerOf(next)) + 1
+        val letters = listOf(
+            letter("nextOther", next, "x", mapOf("joy" to 1.0), now),      // 결이 달라도 표시
+            letter("same", hereZone, "y", mapOf("work_stress" to 1.0), now),
+            letter("far", far, "x", mapOf("joy" to 1.0), now),            // 반경 밖
+            letter("mine", hereZone, "me", mapOf("joy" to 1.0), now),     // 내 노래
+            letter("got", hereZone, "z", mapOf("joy" to 1.0), now),       // 이미 받음
+            letter("old", hereZone, "z", mapOf("joy" to 1.0), now - 31L * 86_400_000L), // 만료
+        )
+        val ids = LetterMatcher().inRange(here, r, "me", letters, setOf("got"), now).map { it.first.id }
+        assertEquals(listOf("same", "nextOther"), ids)
+    }
+
     /** 지도에는 내 것·이미 받은 것·만료된 것을 뺀 다른 사람 노래의 '개수'만 나간다. */
     @Test fun waitingCountsExcludeMineReceivedAndExpired() {
         val now = 100L * 86_400_000L

@@ -33,6 +33,9 @@ data class Caption(val speaker: String, val text: String)
 
 data class Offer(val letter: MusicLetter, val track: Track)
 
+/** 수신 반경 안에 들어온 다른 사람의 노래(주행 지도 왼쪽 아래 카드). meters = 구간 중심까지 거리. */
+data class Nearby(val letter: MusicLetter, val track: Track, val meters: Double)
+
 data class UiState(
     val mode: DriveMode = DriveMode.PARKED,
     val driverId: String = "",
@@ -53,6 +56,8 @@ data class UiState(
     val position: GeoPoint? = null,
     /** 지금 차속 기준 노래 수신 반경(미터). 지도에 표시한다. */
     val pickupRadiusM: Double = 200.0,
+    /** 주행 중 지금 수신 반경 안의 다른 사람 노래(가까운 순). 주차 중에는 비어 있다. */
+    val nearby: List<Nearby> = emptyList(),
     val helpLine: String? = null,
     val ambientApplied: Boolean? = null,
     val portLabels: List<String> = emptyList(),
@@ -167,6 +172,13 @@ class BgmController(
             publish()
         }
         offerNear(p)
+        _state.value = _state.value.copy(nearby = nearbyAt(p))
+    }
+
+    private fun nearbyAt(p: GeoPoint): List<Nearby> {
+        if (mode != DriveMode.DRIVING) return emptyList()
+        return matcher.inRange(p, pickup.radiusMeters(speedKmh), driverId, store.letters(), store.received(driverId), time.nowMillis())
+            .mapNotNull { (l, m) -> catalog.track(l.trackId)?.let { Nearby(l, it, m) } }
     }
 
     /**
@@ -343,7 +355,7 @@ class BgmController(
         val now = time.nowMillis()
         parkedAtMillis = now
         sessionStartMillis = null
-        _state.value = _state.value.copy(pendingOffer = null, listening = false)
+        _state.value = _state.value.copy(pendingOffer = null, listening = false, nearby = emptyList())
         if (start == null || utterances.none { it.speaker == DiaryComposer.USER }) return
 
         val minutes = ((now - start) / 60_000L).toInt().coerceAtLeast(1)
