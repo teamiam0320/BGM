@@ -118,6 +118,7 @@ class BgmViewModel(app: Application) : AndroidViewModel(app) {
             override val offerPending get() = controller.state.value.pendingOffer != null
             override fun canEnter(zoneId: String) = !(voice.isSpeaking && (controller.state.value.zoneLetterCounts[zoneId] ?: 0) > 0)
         }
+        controller.onSpeed(drive.virtualSpeedKmh)
         val tickMs = 100L
         val df = tickMs / 1000.0 / auto.simSeconds
         autoJob = viewModelScope.launch {
@@ -134,11 +135,13 @@ class BgmViewModel(app: Application) : AndroidViewModel(app) {
                 delay(tickMs)
             }
             _console.value = _console.value.copy(autoProgress = null)
+            controller.onSpeed(0.0)
         }
     }
 
     fun stopAutoDrive() {
         autoJob?.cancel(); autoJob = null
+        controller.onSpeed(0.0)
         _console.value = _console.value.copy(autoProgress = null)
     }
 

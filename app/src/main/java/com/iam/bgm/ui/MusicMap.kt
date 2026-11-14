@@ -26,11 +26,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
-import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.withTransform
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
@@ -65,10 +66,35 @@ private val PinViolet = Color(0xFFC9A7FF)
 private val PinBlue = Color(0xFF8FB7FF)
 private val LabelDim = Color(0xFF8A95AD)
 
-/** 3D 추적 시점: 확대 배율, 화면에서 내 차가 놓이는 위치(가로 중앙, 세로 비율), 지도 기울기. */
-private const val FOLLOW_ZOOM = 4.2f
-private const val FOLLOW_ANCHOR_Y = 0.78f
-private const val FOLLOW_TILT_DEG = 52f
+/** 추적 시점: 확대 배율, 화면에서 내 차가 놓이는 위치(가로 중앙, 세로 비율). */
+private const val FOLLOW_ZOOM = 3.4f
+private const val FOLLOW_ANCHOR_Y = 0.80f
+
+/**
+ * 3D 원근: 바닥(추적 카메라를 거친 평면 지도) → 화면의 사영 변환.
+ * 바닥의 먼 쪽(위)은 지평선으로 모이고 가까운 쪽(아래)은 그대로다. 노래 구는 이 변환으로 위치만 옮기고
+ * 모양은 기울이지 않아 둥글게 보인다.
+ */
+private class Perspective(w: Float, h: Float) {
+    val horizon = h * 0.10f
+    private val farY = -h * 1.6f
+    val m = android.graphics.Matrix().apply {
+        val src = floatArrayOf(-0.5f * w, farY, 1.5f * w, farY, 1.5f * w, h, -0.5f * w, h)
+        val dst = floatArrayOf(0.08f * w, horizon, 0.92f * w, horizon, 1.5f * w, h, -0.5f * w, h)
+        setPolyToPoly(src, 0, dst, 0, 4)
+    }
+    private val buf = FloatArray(4)
+    /** 바닥 점이 지평선 너머(화면에 그릴 수 없는 쪽)인가 */
+    private val cullY = farY * 0.92f
+    fun visible(g: Offset) = g.y > cullY
+    fun map(g: Offset): Offset { buf[0] = g.x; buf[1] = g.y; m.mapPoints(buf, 0, buf, 0, 1); return Offset(buf[0], buf[1]) }
+    /** 그 지점의 화면 확대율(멀수록 작다) */
+    fun scaleAt(g: Offset): Float {
+        buf[0] = g.x; buf[1] = g.y; buf[2] = g.x + 10f; buf[3] = g.y
+        m.mapPoints(buf)
+        return hypot(buf[2] - buf[0], buf[3] - buf[1]) / 10f
+    }
+}
 
 /** 위경도 → 화면 좌표. 경도는 cos(위도)로 보정해 서울 위도에서 모양이 찌그러지지 않게 한다. */
 private class Projector(points: List<GeoPoint>, w: Float, h: Float, pad: Float) {
@@ -109,7 +135,7 @@ private class Camera(val car: Offset, val headingDeg: Float, val zoom: Float, va
 }
 
 /** 카메라 입력(그리기 단계에서만 읽어서, 차가 움직일 때 바탕 경로를 다시 만들지 않는다). */
-private data class CamInput(val follow: Boolean, val car: GeoPoint?, val headingDeg: Float)
+private data class CamInput(val follow: Boolean, val car: GeoPoint?, val headingDeg: Float, val tilt: Boolean)
 
 /**
  * 노래 지도. 바탕(실제 도로·한강·공원, OpenStreetMap)은 데이터·크기가 바뀔 때만 경로를 만들고(캐시),
@@ -132,6 +158,10 @@ fun MusicMap(
     selected: String?,
     onSelect: (String?) -> Unit,
     modifier: Modifier = Modifier,
+    /** 주행 중 3D(원근) 시점. false면 기울이지 않은 2D 추적 시점. */
+    tilt3d: Boolean = true,
+    /** 노래 수신 반경(미터). 주행 중 내 차 둘레에 표시한다. */
+    pickupRadiusM: Double? = null,
 ) {
     val t = rememberInfiniteTransition(label = "map")
     val pulse by t.animateFloat(0f, 1f, infiniteRepeatable(tween(1800, easing = LinearEasing)), label = "pulse")
@@ -153,7 +183,7 @@ fun MusicMap(
         (prev + delta).also { lastHeading[0] = it }
     } ?: lastHeading[0] else lastHeading[0]
     val heading by animateFloatAsState(targetHeading, tween(700), label = "heading")
-    val cam = rememberUpdatedState(CamInput(follow, if (carGeo != null) GeoPoint(lat.toDouble(), lng.toDouble()) else null, heading))
+    val cam = rememberUpdatedState(CamInput(follow, if (carGeo != null) GeoPoint(lat.toDouble(), lng.toDouble()) else null, heading, tilt3d))
 
     var boxModifier = modifier
     if (detail) {
@@ -166,13 +196,6 @@ fun MusicMap(
             }
         }
     }
-    // 3D: 지도를 앞으로 눕혀 원근감을 준다. 눕히면 위쪽 모서리가 비므로 조금 크게 그려 덮는다.
-    val layer = if (follow) Modifier.graphicsLayer {
-        rotationX = FOLLOW_TILT_DEG
-        cameraDistance = 9f * density
-        scaleX = 1.7f; scaleY = 1.7f
-        transformOrigin = TransformOrigin(0.5f, FOLLOW_ANCHOR_Y)
-    } else Modifier
 
     // 바탕 그리기 블록은 데이터가 바뀔 때만 새로 만든다(차가 움직일 때마다 경로 1,600개를 다시 만들지 않게).
     val baseBlock: CacheDrawScope.() -> DrawResult = remember(osm, map, track, route, detail, pinZones) {
@@ -214,12 +237,19 @@ fun MusicMap(
                     drawPath(routePath, PinBlue.copy(alpha = 0.6f), style = Stroke(4 * u * k, cap = StrokeCap.Round, join = StrokeJoin.Round))
                 }
                 if (camera != null) {
+                    val persp = if (ci.tilt) Perspective(size.width, size.height) else null
+                    if (persp != null) drawIntoCanvas { it.nativeCanvas.save(); it.nativeCanvas.concat(persp.m) }
                     withTransform({
                         translate(camera.anchor.x, camera.anchor.y)
                         rotate(-camera.headingDeg, pivot = Offset.Zero)
                         scale(camera.zoom, camera.zoom, pivot = Offset.Zero)
                         translate(-camera.car.x, -camera.car.y)
                     }) { drawBase() }
+                    if (persp != null) {
+                        drawIntoCanvas { it.nativeCanvas.restore() }
+                        // 지평선 쪽은 안개처럼 흐리게(먼 곳이 끝없이 이어지는 느낌)
+                        drawRect(Brush.verticalGradient(listOf(Color(0xFF0D1426), Color(0xFF0D1426), Color(0x000D1426)), startY = 0f, endY = size.height * 0.34f))
+                    }
                 } else {
                     drawBase()
                     // 핀이 없는 곳의 지명(주차 중에만). 핀이 있는 구간의 지명은 핀 아래에 붙인다.
@@ -242,7 +272,7 @@ fun MusicMap(
     }
 
     Box(boxModifier) {
-        Box(Modifier.fillMaxSize().then(layer)) {
+        Box(Modifier.fillMaxSize()) {
             // ---- 바탕: 캐시 ----
             Spacer(Modifier.fillMaxSize().drawWithCache(baseBlock))
 
@@ -250,8 +280,36 @@ fun MusicMap(
             Canvas(Modifier.fillMaxSize()) {
                 val u = density
                 val pr = Projector(extent, size.width, size.height, 70 * u)
-                val camera = cameraOf(cam.value, pr, size.width, size.height)
-                val at: (GeoPoint) -> Offset = { g -> camera?.screen(pr.px(g)) ?: pr.px(g) }
+                val ci = cam.value
+                val camera = cameraOf(ci, pr, size.width, size.height)
+                val persp = if (camera != null && ci.tilt) Perspective(size.width, size.height) else null
+                val ground: (GeoPoint) -> Offset = { g -> camera?.screen(pr.px(g)) ?: pr.px(g) }
+                if (persp != null) {
+                    // 3D: 노래 지점은 기울이지 않은 '구'로. 먼 것부터 그려 가까운 구가 앞에 오게 한다.
+                    pins.map { it to ground(Zone.centerOf(it.zoneId)) }.filter { persp.visible(it.second) }
+                        .sortedBy { it.second.y }.forEach { (p, g) ->
+                            val o = persp.map(g)
+                            val k = persp.scaleAt(g).coerceIn(0.25f, 1.6f)
+                            if (p.zoneId == offerZone) {
+                                drawOval(PinViolet.copy(alpha = 0.5f * (1 - pulse)), topLeft = Offset(o.x - (20 + 46 * pulse) * u * k, o.y - (6 + 14 * pulse) * u * k), size = Size((40 + 92 * pulse) * u * k, (12 + 28 * pulse) * u * k))
+                            }
+                            val color = if (p.waiting > 0) PinViolet else PinBlue
+                            val r = (if (p.waiting > 0) 12 + 3 * minOf(p.waiting, 4) else 11) * u * k
+                            sphere(o, r, color, breathe)
+                            if (p.received) drawOval(PinViolet, topLeft = Offset(o.x - r * 1.5f, o.y - r * 0.4f), size = Size(r * 3f, r * 0.8f), style = Stroke(2f * u))
+                        }
+                    privateZones.forEach { (_, r) ->
+                        val g = ground(r.point)
+                        if (persp.visible(g)) { val o = persp.map(g); drawCircle(PinBlue.copy(alpha = 0.7f), radius = 7 * u * persp.scaleAt(g).coerceIn(0.25f, 1.4f), center = o, style = Stroke(2 * u)) }
+                    }
+                    // 내 차: 바닥에 붙은 화살표(원근 적용)
+                    drawIntoCanvas { it.nativeCanvas.save(); it.nativeCanvas.concat(persp.m) }
+                    pickupRadiusM?.let { pickupRing(camera!!.anchor, pr.meters(it) * camera.zoom, u) }
+                    carArrow(camera!!.anchor, u * 1.3f)
+                    drawIntoCanvas { it.nativeCanvas.restore() }
+                    return@Canvas
+                }
+                val at = ground
                 if (camera != null) privateZones.forEach { (_, r) ->
                     val o = at(r.point)
                     drawCircle(Color(0xFF2A3550), radius = 9 * u, center = o)
@@ -291,6 +349,7 @@ fun MusicMap(
                 }
                 // 내 차: 추적 시점에서는 화면 아래 중앙에 진행 방향 화살표, 2D에서는 점(실제 위치, 저장·공유하지 않음)
                 if (camera != null) {
+                    pickupRadiusM?.let { pickupRing(camera.anchor, pr.meters(it) * camera.zoom, u) }
                     drawCircle(Color.White.copy(alpha = 0.25f * (1 - pulse)), radius = (16 + 26 * pulse) * u, center = camera.anchor)
                     carArrow(camera.anchor, u)
                 } else cam.value.car?.let { g ->
@@ -346,6 +405,26 @@ private fun nearestPin(p: GeoPoint, pinZones: Set<String>): String? {
 private fun DrawScope.carDot(o: Offset, u: Float) {
     drawCircle(Color(0xFF0A0F1C), radius = 11 * u, center = o)
     drawCircle(Color.White, radius = 8 * u, center = o)
+}
+
+/**
+ * 바닥 지점 [g] 위에 놓인 빛나는 구. 왼쪽 위에서 빛이 오고, 바닥에 납작한 그림자가 생긴다.
+ */
+private fun DrawScope.sphere(g: Offset, r: Float, color: Color, glow: Float) {
+    val c = Offset(g.x, g.y - r * 1.15f) // 바닥에서 살짝 떠 있음
+    drawOval(Color.Black.copy(alpha = 0.45f), topLeft = Offset(g.x - r * 0.95f, g.y - r * 0.22f), size = Size(r * 1.9f, r * 0.44f))
+    drawCircle(Brush.radialGradient(listOf(color.copy(alpha = 0.40f * glow), Color.Transparent), center = c, radius = r * 2.6f), radius = r * 2.6f, center = c)
+    val dark = Color(color.red * 0.35f, color.green * 0.3f, color.blue * 0.55f, 1f)
+    drawCircle(
+        Brush.radialGradient(listOf(Color.White, color, dark), center = Offset(c.x - r * 0.38f, c.y - r * 0.42f), radius = r * 1.55f),
+        radius = r, center = c,
+    )
+}
+
+/** 노래 수신 반경: 이 원 안에 노래가 들어오면 에이미가 들려준다. */
+private fun DrawScope.pickupRing(c: Offset, r: Float, u: Float) {
+    drawCircle(PinViolet.copy(alpha = 0.08f), radius = r, center = c)
+    drawCircle(PinViolet.copy(alpha = 0.45f), radius = r, center = c, style = Stroke(2.2f * u))
 }
 
 /** 진행 방향(화면 위)을 가리키는 화살표. */

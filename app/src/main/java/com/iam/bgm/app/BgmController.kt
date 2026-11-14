@@ -51,6 +51,8 @@ data class UiState(
     val zoneLetterCounts: Map<String, Int> = emptyMap(),
     /** 내 차의 현재 위치(내 화면 표시용, 저장·공유하지 않는다). */
     val position: GeoPoint? = null,
+    /** 지금 차속 기준 노래 수신 반경(미터). 지도에 표시한다. */
+    val pickupRadiusM: Double = 200.0,
     val helpLine: String? = null,
     val ambientApplied: Boolean? = null,
     val portLabels: List<String> = emptyList(),
@@ -148,13 +150,43 @@ class BgmController(
         publish()
     }
 
+    private var speedKmh = 0.0
+    private val pickup = policy.pickup
+
+    /** Vehicle SDK 차속(또는 시연 주행의 가상 차속). 노래 수신 반경을 정한다. */
+    fun onSpeed(kmh: Double) {
+        speedKmh = kmh
+        _state.value = _state.value.copy(pickupRadiusM = pickup.radiusMeters(kmh))
+    }
+
     fun onLocation(p: GeoPoint) {
         val z = Zone.idOf(p)
-        if (z == zoneId) { _state.value = _state.value.copy(position = p); return }
         _state.value = _state.value.copy(position = p)
-        zoneId = z
-        publish()
-        onZoneEntered(z)
+        if (z != zoneId) {
+            zoneId = z
+            publish()
+        }
+        offerNear(p)
+    }
+
+    /**
+     * 위치가 들어올 때마다: 수신 반경 안(또는 같은 구간)의 노래 중 결이 맞는 것을 제안한다.
+     * 에이미가 말하는 중이거나 다른 대답을 기다리는 중이면 이번엔 넘기고 다음 위치에서 다시 본다
+     * (구간에 '들어서는 순간'만 보던 때와 달리, 반경 안에 있는 동안은 제안을 놓치지 않는다).
+     */
+    private fun offerNear(p: GeoPoint) {
+        if (mode != DriveMode.DRIVING || await != Await.NONE) return
+        if (!SpeechGate.canOffer(nextTurnDistance, voice.isSpeaking)) return
+        val letter = matcher.matchNear(
+            position = p,
+            radiusMeters = pickup.radiusMeters(speedKmh),
+            myThemes = sessionThemes(),
+            me = driverId,
+            letters = store.letters(),
+            alreadyReceived = store.received(driverId),
+            nowMillis = time.nowMillis(),
+        ) ?: return
+        offer(letter)
     }
 
     /** FusedLocation 근접 알림(ProximityAlert ENTER)도 같은 경로로 들어온다. */
@@ -169,6 +201,10 @@ class BgmController(
             alreadyReceived = store.received(driverId),
             nowMillis = time.nowMillis(),
         ) ?: return
+        offer(letter)
+    }
+
+    private fun offer(letter: MusicLetter) {
         val track = catalog.track(letter.trackId) ?: return
         val offer = Offer(letter, track)
         await = Await.OFFER_ANSWER

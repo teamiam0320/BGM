@@ -42,6 +42,7 @@ class AutoDriveTest {
         val lines = sc.drivers.first { it.id == driverId }.lines
         time.hour = sc.drivers.first { it.id == driverId }.startHour
         val d = AutoDrive(sc.trackPoints, timeline)
+        c.onSpeed(d.virtualSpeedKmh)
         val env = object : DriveEnv {
             override val voiceBusy get() = voice.isSpeaking
             override val offerPending get() = c.state.value.pendingOffer != null
@@ -78,7 +79,12 @@ class AutoDriveTest {
         time.advanceMinutes(60 * 24)
         c.switchDriver("driver_b", sc.privateZones)
         drive("driver_b")
-        assertEquals("B는 A의 노래 한 곡만, 강변북로에서 제안받는다", listOf(Triple("driver_b", aLetter.id, riverside)), offers)
+        assertEquals("B는 A의 노래 한 곡만 제안받는다", listOf("driver_b" to aLetter.id), offers.map { it.first to it.second })
+        // 제안은 A의 노래 구간이거나, 그 구간 중심이 수신 반경 안일 때 일어난다
+        val (_, _, at) = offers.single()
+        val r = TestData.policy.pickup.radiusMeters(AutoDrive(sc.trackPoints, sc.autoDrive!!.drivers.getValue("driver_b")).virtualSpeedKmh)
+        assertTrue(at == riverside || Zone.isNear(at, riverside))
+        assertTrue(r in 200.0..600.0)
         assertEquals(listOf("driver_b"), store.letters().single { it.id == aLetter.id }.thankedBy)
         assertEquals(listOf(aLetter.id), c.state.value.latestDiary!!.receivedLetterIds)
     }

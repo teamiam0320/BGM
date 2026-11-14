@@ -108,6 +108,33 @@ class CoreLogicTest {
         assertTrue(m.canLeaveAt("5:5", listOf("7:7")))
     }
 
+    /** 수신 반경은 차속 × 15초, 200~600m. */
+    @Test fun pickupRadiusFollowsSpeed() {
+        val p = TestData.policy.pickup
+        assertEquals(200.0, p.radiusMeters(0.0), 1e-9)
+        assertEquals(200.0, p.radiusMeters(30.0), 1e-9)       // 도심 30km/h → 125m → 최소 200m
+        assertEquals(333.3, p.radiusMeters(80.0), 0.1)        // 강변북로 80km/h
+        assertEquals(600.0, p.radiusMeters(200.0), 1e-9)      // 상한
+    }
+
+    /** 옆 구간의 노래는 반경이 넓을 때(빠를 때)만 미리 받는다. 같은 구간이면 반경과 무관하게 받는다. */
+    @Test fun matchNearUsesRadiusAroundZoneCenter() {
+        val now = 100L * 86_400_000L
+        val t = mapOf("work_stress" to 1.0)
+        val here = GeoPoint(37.5300, 127.0000)
+        val hereZone = Zone.idOf(here)
+        val (a, b) = hereZone.split(":").map { it.toLong() }
+        val nextZone = "${a + 1}:$b" // 북쪽 옆 구간(중심이 약 300~700m 떨어짐)
+        val far = Zone.metersBetween(here, Zone.centerOf(nextZone))
+        val letters = listOf(letter("next", nextZone, "x", t, now))
+        val m = LetterMatcher()
+        val me = ThemeVector(t)
+        assertNull(m.matchNear(here, far - 1, me, "me", letters, emptySet(), now))
+        assertEquals("next", m.matchNear(here, far + 1, me, "me", letters, emptySet(), now)?.id)
+        val same = listOf(letter("same", hereZone, "x", t, now))
+        assertEquals("same", m.matchNear(here, 0.0, me, "me", same, emptySet(), now)?.id)
+    }
+
     /** 지도에는 내 것·이미 받은 것·만료된 것을 뺀 다른 사람 노래의 '개수'만 나간다. */
     @Test fun waitingCountsExcludeMineReceivedAndExpired() {
         val now = 100L * 86_400_000L

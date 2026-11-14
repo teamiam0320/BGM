@@ -98,6 +98,7 @@ fun BgmApp(vm: BgmViewModel) {
     // 시연 콘솔은 심사용이라 기본으로 닫아 둔다(상단의 작은 '심사용' 버튼으로 연다)
     var consoleOpen by remember { mutableStateOf(false) }
     var tab by remember { mutableStateOf(Tab.MAP) }
+    var map3d by remember { mutableStateOf(true) }
     var diarySel by remember { mutableStateOf<String?>(null) }
     // 주차해서 일기가 완성되면 일기장의 그 일기를 연다(도착 의식)
     LaunchedEffect(s.latestDiary?.id) { s.latestDiary?.let { tab = Tab.DIARY; diarySel = it.id } }
@@ -117,7 +118,7 @@ fun BgmApp(vm: BgmViewModel) {
                 TopBar(s, vm, c, consoleOpen) { consoleOpen = !consoleOpen }
                 Crossfade(targetState = if (driving) null else tab, animationSpec = tween(350), label = "screen") { t ->
                     when (t) {
-                        null -> DrivingScreen(s, vm)
+                        null -> DrivingScreen(s, vm, map3d) { map3d = !map3d }
                         Tab.MAP -> Box(Modifier.fillMaxSize().padding(start = 40.dp, end = 40.dp, top = 12.dp, bottom = 36.dp)) { HomeMap(s, vm) }
                         Tab.DIARY -> DiaryBook(s, vm, diarySel) { diarySel = it }
                         Tab.SONGS -> MySongs(s, vm)
@@ -393,7 +394,7 @@ private fun Pill(text: String, dot: Color) {
 // ---------------- 주행 화면: 음성 전용, 최소 표시 ----------------
 
 @Composable
-private fun DrivingScreen(s: UiState, vm: BgmViewModel) {
+private fun DrivingScreen(s: UiState, vm: BgmViewModel, map3d: Boolean, onToggle3d: () -> Unit) {
     Column(
         Modifier.fillMaxSize().padding(start = 48.dp, end = 48.dp, top = 8.dp, bottom = 40.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -403,9 +404,10 @@ private fun DrivingScreen(s: UiState, vm: BgmViewModel) {
             MusicMap(
                 route = vm.data.scenario.route, map = vm.data.scenario.map, osm = vm.data.osm, track = vm.data.scenario.trackPoints, position = s.position, pins = pinsOf(s),
                 currentZone = s.zoneId, offerZone = s.pendingOffer?.letter?.zoneId,
-                detail = false, selected = null, onSelect = {}, modifier = Modifier.fillMaxSize(),
+                detail = false, selected = null, onSelect = {}, modifier = Modifier.fillMaxSize(), tilt3d = map3d, pickupRadiusM = s.pickupRadiusM,
             )
             ListenBadge(s.listening, Modifier.align(Alignment.TopStart).padding(20.dp))
+            ViewToggle(map3d, onToggle3d, Modifier.align(Alignment.TopEnd).padding(top = 36.dp, end = 20.dp))
         }
         Spacer(Modifier.height(24.dp))
         Transcript(s.captions)
@@ -536,6 +538,23 @@ private fun zoneName(zoneId: String, vm: BgmViewModel): String {
     val named = vm.data.scenario.map.landmarks.map { it.label to it.point }
     val best = named.minByOrNull { (_, p) -> (p.lat - c.lat) * (p.lat - c.lat) + (p.lng - c.lng) * (p.lng - c.lng) }
     return best?.first ?: "이 구간"
+}
+
+/** 3D/2D 전환. 실제 내비처럼 한 번 누르는 큰 버튼 하나만 둔다(주행 중 터치 최소화). */
+@Composable
+private fun ViewToggle(map3d: Boolean, onToggle: () -> Unit, modifier: Modifier) {
+    Row(
+        modifier.clip(RoundedCornerShape(18.dp)).background(Color(0xE60A0F1C)).border(1.dp, Hair, RoundedCornerShape(18.dp))
+            .clickable(onClick = onToggle).padding(6.dp),
+    ) {
+        listOf(true to "3D", false to "2D").forEach { (is3d, label) ->
+            val on = is3d == map3d
+            Box(
+                Modifier.size(width = 64.dp, height = 52.dp).clip(RoundedCornerShape(14.dp)).background(if (on) Accent else Color.Transparent),
+                contentAlignment = Alignment.Center,
+            ) { Text(label, color = if (on) Ink else Soft, fontSize = 21.sp, fontWeight = FontWeight.Bold) }
+        }
+    }
 }
 
 @Composable

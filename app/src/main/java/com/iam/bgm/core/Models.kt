@@ -64,7 +64,14 @@ data class ContentPolicy(
     val blockedWords: List<String>,
     val crisisWords: List<String>,
     val helpLine: String,
+    val pickup: PickupPolicy = PickupPolicy(),
 )
+
+/** 노래 수신 반경: 차속이 빠를수록 넓게(제안을 듣고 대답하는 동안 그 길 위에 있도록). */
+@Serializable
+data class PickupPolicy(val leadSeconds: Double = 15.0, val minMeters: Double = 200.0, val maxMeters: Double = 600.0) {
+    fun radiusMeters(speedKmh: Double): Double = (speedKmh / 3.6 * leadSeconds).coerceIn(minMeters, maxMeters)
+}
 
 // ---------- 도메인 모델 ----------
 

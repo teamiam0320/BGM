@@ -46,6 +46,10 @@ class AutoDrive(private val track: List<GeoPoint>, timeline: DriverTimeline) {
         total = cum.last()
     }
 
+    /** 경로 전체 길이(미터). 시연 주행의 가상 차속 = 거리 / 소요 시간. */
+    val distanceMeters get() = total
+    val virtualSpeedKmh get() = total / 1000.0 / (tripMinutes / 60.0)
+
     var progress = 0.0
         private set
     private var next = 0

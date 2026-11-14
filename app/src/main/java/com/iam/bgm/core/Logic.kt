@@ -26,6 +26,12 @@ object Zone {
         return GeoPoint((a + 0.5) * LAT_STEP, (b + 0.5) * LNG_STEP)
     }
 
+    /** 두 지점 사이 거리(미터, 근사). */
+    fun metersBetween(a: GeoPoint, b: GeoPoint): Double {
+        val k = Math.cos(Math.toRadians((a.lat + b.lat) / 2))
+        return Math.hypot((a.lat - b.lat) * 110_540.0, (a.lng - b.lng) * 111_320.0 * k)
+    }
+
     /** 두 구간이 같거나 맞닿아 있는지(체비셰프 거리 ≤ 1). 집·회사 주변 차단에 쓴다. */
     fun isNear(a: String, b: String): Boolean {
         val (a1, a2) = a.split(":").map { it.toLong() }
@@ -152,6 +158,26 @@ class LetterMatcher(
                     .thenBy { it.first.id },
             )
             .firstOrNull()?.first
+    }
+
+    /**
+     * 차 위치 기준으로 받을 수 있는 노래: 같은 구간이거나, 구간 중심이 반경 안이면 후보.
+     * 위치는 구간 단위로만 저장되므로 거리는 구간 중심으로 잰다(같은 구간이면 반경과 무관하게 후보).
+     */
+    fun matchNear(
+        position: GeoPoint,
+        radiusMeters: Double,
+        myThemes: ThemeVector,
+        me: String,
+        letters: List<MusicLetter>,
+        alreadyReceived: Set<String>,
+        nowMillis: Long,
+    ): MusicLetter? {
+        val here = Zone.idOf(position)
+        val zones = letters.map { it.zoneId }.distinct()
+            .filter { it == here || Zone.metersBetween(position, Zone.centerOf(it)) <= radiusMeters }
+        return zones.mapNotNull { z -> match(z, myThemes, me, letters, alreadyReceived, nowMillis) }
+            .maxWithOrNull(compareBy<MusicLetter> { it.themes.cosine(myThemes) }.thenBy { it.createdAtMillis }.thenByDescending { it.id })
     }
 
     /**
