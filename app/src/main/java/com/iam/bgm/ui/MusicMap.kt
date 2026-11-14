@@ -9,6 +9,21 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Text
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -135,7 +150,7 @@ private class Camera(val car: Offset, val headingDeg: Float, val zoom: Float, va
 }
 
 /** 카메라 입력(그리기 단계에서만 읽어서, 차가 움직일 때 바탕 경로를 다시 만들지 않는다). */
-private data class CamInput(val follow: Boolean, val car: GeoPoint?, val headingDeg: Float, val tilt: Boolean)
+private data class CamInput(val follow: Boolean, val car: GeoPoint?, val headingDeg: Float, val tilt: Boolean, val zoomMul: Float = 1f)
 
 /**
  * 노래 지도. 바탕(실제 도로·한강·공원, OpenStreetMap)은 데이터·크기가 바뀔 때만 경로를 만들고(캐시),
@@ -183,16 +198,29 @@ fun MusicMap(
         (prev + delta).also { lastHeading[0] = it }
     } ?: lastHeading[0] else lastHeading[0]
     val heading by animateFloatAsState(targetHeading, tween(700), label = "heading")
-    val cam = rememberUpdatedState(CamInput(follow, if (carGeo != null) GeoPoint(lat.toDouble(), lng.toDouble()) else null, heading, tilt3d))
+    // 확대: 주차 지도는 두 손가락 확대·이동(+/− 버튼도), 주행 지도는 +/− 버튼으로 차 주변 배율
+    val zoom = remember { mutableFloatStateOf(1f) }
+    val pan = remember { mutableStateOf(Offset.Zero) }
+    val followMul = remember { mutableFloatStateOf(1f) }
+    val cam = rememberUpdatedState(CamInput(follow, if (carGeo != null) GeoPoint(lat.toDouble(), lng.toDouble()) else null, heading, tilt3d, followMul.floatValue))
 
     var boxModifier = modifier
     if (detail) {
         boxModifier = modifier.pointerInput(pins, extent) {
             detectTapGestures { pos ->
-                val pr = Projector(extent, size.width.toFloat(), size.height.toFloat(), 70 * density)
-                val hit = pins.minByOrNull { val o = pr.px(Zone.centerOf(it.zoneId)); hypot(o.x - pos.x, o.y - pos.y) }
-                val d = hit?.let { val o = pr.px(Zone.centerOf(it.zoneId)); hypot(o.x - pos.x, o.y - pos.y) }
+                val w = size.width.toFloat(); val h = size.height.toFloat()
+                val pr = Projector(extent, w, h, 70 * density)
+                val v = { g: GeoPoint -> viewOf(pr.px(g), zoom.floatValue, pan.value, w, h) }
+                val hit = pins.minByOrNull { val o = v(Zone.centerOf(it.zoneId)); hypot(o.x - pos.x, o.y - pos.y) }
+                val d = hit?.let { val o = v(Zone.centerOf(it.zoneId)); hypot(o.x - pos.x, o.y - pos.y) }
                 onSelect(if (hit != null && d != null && d < 60 * density) hit.zoneId else null)
+            }
+        }.pointerInput(Unit) {
+            detectTransformGestures { centroid, panChange, zoomChange, _ ->
+                val w = size.width.toFloat(); val h = size.height.toFloat()
+                val (z, pn) = zoomAround(zoom.floatValue, pan.value, zoomChange, centroid, w, h)
+                zoom.floatValue = z
+                pan.value = clampPan(pn + panChange, z, w, h)
             }
         }
     }
@@ -223,7 +251,9 @@ fun MusicMap(
                 val ci = cam.value
                 val camera = cameraOf(ci, pr, size.width, size.height)
                 // 확대해도 선이 너무 굵어지지 않게(내비처럼 조금만 굵어짐)
-                val k = if (camera != null) 1.8f / camera.zoom else 1f
+                val z = zoom.floatValue
+                val pn = pan.value
+                val k = if (camera != null) 1.8f / camera.zoom else 1f / Math.pow(z.toDouble(), 0.6).toFloat()
                 val drawBase: DrawScope.() -> Unit = {
                     parks.forEach { drawPath(it, Park) }
                     waters.forEach { (p, w) ->
@@ -251,12 +281,15 @@ fun MusicMap(
                         drawRect(Brush.verticalGradient(listOf(Color(0xFF0D1426), Color(0xFF0D1426), Color(0x000D1426)), startY = 0f, endY = size.height * 0.34f))
                     }
                 } else {
-                    drawBase()
+                    withTransform({
+                        translate(pn.x, pn.y)
+                        scale(z, z, pivot = Offset(size.width / 2f, size.height / 2f))
+                    }) { drawBase() }
                     // 핀이 없는 곳의 지명(주차 중에만). 핀이 있는 구간의 지명은 핀 아래에 붙인다.
-                    labels.forEach { (o, l) -> drawText(l, topLeft = Offset(o.x - l.size.width / 2f, o.y - l.size.height / 2f)) }
+                    labels.forEach { (o0, l) -> val o = viewOf(o0, z, pn, size.width, size.height); drawText(l, topLeft = Offset(o.x - l.size.width / 2f, o.y - l.size.height / 2f)) }
                     // 집·회사
                     privateZones.forEach { (_, r) ->
-                        val o = pr.px(r.point)
+                        val o = viewOf(pr.px(r.point), z, pn, size.width, size.height)
                         drawCircle(Color(0xFF2A3550), radius = 9 * u, center = o)
                         drawCircle(PinBlue.copy(alpha = 0.7f), radius = 9 * u, center = o, style = Stroke(2 * u))
                         if (detail) {
@@ -283,7 +316,9 @@ fun MusicMap(
                 val ci = cam.value
                 val camera = cameraOf(ci, pr, size.width, size.height)
                 val persp = if (camera != null && ci.tilt) Perspective(size.width, size.height) else null
-                val ground: (GeoPoint) -> Offset = { g -> camera?.screen(pr.px(g)) ?: pr.px(g) }
+                val zz = zoom.floatValue
+                val pp = pan.value
+                val ground: (GeoPoint) -> Offset = { g -> camera?.screen(pr.px(g)) ?: viewOf(pr.px(g), zz, pp, size.width, size.height) }
                 if (persp != null) {
                     // 3D: 노래 지점은 기울이지 않은 '구'로. 먼 것부터 그려 가까운 구가 앞에 오게 한다.
                     pins.map { it to ground(Zone.centerOf(it.zoneId)) }.filter { persp.visible(it.second) }
@@ -353,12 +388,26 @@ fun MusicMap(
                     drawCircle(Color.White.copy(alpha = 0.25f * (1 - pulse)), radius = (16 + 26 * pulse) * u, center = camera.anchor)
                     carArrow(camera.anchor, u)
                 } else cam.value.car?.let { g ->
-                    val o = pr.px(g)
+                    val o = viewOf(pr.px(g), zz, pp, size.width, size.height)
                     drawCircle(Color.White.copy(alpha = 0.35f * (1 - pulse)), radius = (10 + 22 * pulse) * u, center = o)
                     carDot(o, u)
                 }
             }
         }
+        // 확대·축소 버튼(에뮬레이터·장갑 낀 손에서도 쓸 수 있게). 주행 중에는 차 주변 배율만 바꾼다.
+        ZoomButtons(
+            canReset = if (follow) followMul.floatValue != 1f else (zoom.floatValue != 1f || pan.value != Offset.Zero),
+            onZoom = { f ->
+                if (follow) followMul.floatValue = (followMul.floatValue * f).coerceIn(0.5f, 2.5f)
+                else {
+                    val z = (zoom.floatValue * f).coerceIn(1f, 6f)
+                    pan.value = pan.value * (z / zoom.floatValue)
+                    zoom.floatValue = z
+                }
+            },
+            onReset = { followMul.floatValue = 1f; zoom.floatValue = 1f; pan.value = Offset.Zero },
+            modifier = Modifier.align(Alignment.CenterEnd).padding(end = 20.dp),
+        )
         // 출처 표시는 기울이지 않은 화면에(3D에서도 읽을 수 있게)
         if (follow) Canvas(Modifier.fillMaxSize()) {
             osm?.let {
@@ -371,7 +420,47 @@ fun MusicMap(
 
 private fun cameraOf(ci: CamInput, pr: Projector, w: Float, h: Float): Camera? {
     if (!ci.follow || ci.car == null) return null
-    return Camera(pr.px(ci.car), ci.headingDeg, FOLLOW_ZOOM, Offset(w / 2f, h * FOLLOW_ANCHOR_Y))
+    return Camera(pr.px(ci.car), ci.headingDeg, FOLLOW_ZOOM * ci.zoomMul, Offset(w / 2f, h * FOLLOW_ANCHOR_Y))
+}
+
+/** 주차 지도 확대·이동: 지도 좌표 → 화면. 화면 중심을 기준으로 z배 확대한 뒤 pan만큼 옮긴다. */
+internal fun viewOf(o: Offset, z: Float, pan: Offset, w: Float, h: Float): Offset {
+    val c = Offset(w / 2f, h / 2f)
+    return Offset((o.x - c.x) * z + c.x + pan.x, (o.y - c.y) * z + c.y + pan.y)
+}
+
+/** 두 손가락 확대: 손가락 사이 지점이 화면에서 움직이지 않도록 pan을 함께 조정한다. */
+internal fun zoomAround(z: Float, pan: Offset, factor: Float, centroid: Offset, w: Float, h: Float): Pair<Float, Offset> {
+    val nz = (z * factor).coerceIn(1f, 6f)
+    val f = nz / z
+    val c = Offset(w / 2f, h / 2f)
+    val q = centroid - c
+    return nz to Offset(q.x * (1 - f) + pan.x * f, q.y * (1 - f) + pan.y * f)
+}
+
+/** 확대한 만큼만 끌 수 있게(지도가 화면 밖으로 사라지지 않게). */
+internal fun clampPan(p: Offset, z: Float, w: Float, h: Float): Offset {
+    val mx = (z - 1f) * w / 2f + w * 0.15f
+    val my = (z - 1f) * h / 2f + h * 0.15f
+    return Offset(p.x.coerceIn(-mx, mx), p.y.coerceIn(-my, my))
+}
+
+@Composable
+private fun ZoomButtons(canReset: Boolean, onZoom: (Float) -> Unit, onReset: () -> Unit, modifier: Modifier) {
+    Column(
+        modifier.clip(RoundedCornerShape(18.dp)).background(Color(0xE60A0F1C)).border(1.dp, Color(0x1AFFFFFF), RoundedCornerShape(18.dp)).padding(6.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        listOf("+" to 1.5f, "−" to (1f / 1.5f)).forEach { (label, f) ->
+            Box(Modifier.size(56.dp).clip(RoundedCornerShape(14.dp)).clickable { onZoom(f) }, contentAlignment = Alignment.Center) {
+                Text(label, color = Color(0xFFF2F5FB), fontSize = 30.sp)
+            }
+        }
+        // 원위치 버튼은 늘 같은 자리에 두어 +/− 위치가 움직이지 않게 한다(쓸 수 없을 땐 흐리게)
+        Box(Modifier.size(56.dp).clip(RoundedCornerShape(14.dp)).clickable(enabled = canReset, onClick = onReset), contentAlignment = Alignment.Center) {
+            Text("↺", color = if (canReset) PinBlue else Color(0x33FFFFFF), fontSize = 26.sp)
+        }
+    }
 }
 
 /** 차가 놓인 경로 구간의 진행 방향(도, 0=북쪽·위, 90=동쪽·오른쪽). 화면 좌표와 같은 경도 보정을 쓴다. */

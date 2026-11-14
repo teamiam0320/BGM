@@ -41,7 +41,7 @@ adb shell am start -n com.iam.bgm/.MainActivity
 ### 2) 소스에서 빌드
 
 ```bash
-./gradlew :app:testDebugUnitTest   # 단위 테스트 (27개)
+./gradlew :app:testDebugUnitTest   # 단위 테스트 (29개)
 ./gradlew :app:assembleRelease     # app/build/outputs/apk/release/app-release.apk
 ```
 
@@ -71,6 +71,7 @@ adb shell am start -n com.iam.bgm/.MainActivity
 
 - **다른 사람의 노래는 곡 수만** 표시합니다. 어떤 노래인지는 비슷한 하루를 보낸 날 그 길을 지날 때 에이미가 음성으로 들려줍니다(노래를 '우연히 받는' 경험을 지키기 위해).
 - **내가 남긴 노래**는 위치와 "닿았어요" 상태까지 표시하고, 구간을 누르면 상세 카드가 열립니다.
+- **확대:** 주차 지도는 두 손가락으로 확대(최대 6배)·이동하거나 오른쪽의 ＋/−/↺ 버튼을 씁니다. 주행 지도는 ＋/− 버튼으로 차 주변 배율(0.5~2.5배)을 바꾸며, 수신 반경 원도 함께 바뀝니다.
 - **주행 중에는 '흘끗 보는 지도'**로 바뀝니다. 내 차를 따라가는 3D 시점이며, 글자 없이 경로·노래가 있는 구간의 빛나는 점만 그리고 터치를 받지 않습니다.
 - 위치는 지도에서도 약 500m 구간 단위로만 다룹니다.
 - 지도 데이터: `assets/osm_map.json`(도로·물길·공원, `tools/osm_build.py`로 Overpass 결과를 단순화해 생성), 지명은 `demo_scenario.json`의 `map`.
@@ -149,7 +150,7 @@ tools/generate_tracks.py   데모 음원 합성기 (저작권 문제 없는 자�
 
 ## 테스트
 
-`./gradlew :app:testDebugUnitTest` — 27개 테스트, 앱이 실제로 쓰는 `assets` JSON을 그대로 읽어 검증합니다.
+`./gradlew :app:testDebugUnitTest` — 29개 테스트, 앱이 실제로 쓰는 `assets` JSON을 그대로 읽어 검증합니다.
 
 | 테스트 | 내용 |
 |---|---|
@@ -157,6 +158,7 @@ tools/generate_tracks.py   데모 음원 합성기 (저작권 문제 없는 자�
 | `ScenarioTest` (6) | 기획서 시나리오 1·2 전체(남기기→주차 일기→받기→고마움→다음 운전 알림 1회), 집·회사 차단, 위기 한마디, 주행 중 터치 무시, 대화 없는 주차 |
 | `LocationGateTest` (2) | 회귀: SDK 위치 갱신이 시연 콘솔로 옮긴 구간을 덮어쓰지 않음 |
 | `AutoDriveTest` (2) | 실제 도로 경로로 자동 주행 전체(A→B): 노래 제안은 B의 강변북로에서 A의 노래 한 번뿐, 경로가 시나리오 지점을 모두 지남 |
+| `MapZoomTest` (2) | 두 손가락 확대 시 손가락 사이 지점 고정, 배율 1~6배·이동 범위 제한 |
 | `VehicleGateTest` (2) | 회귀: 차량 서비스 재연결로 SDK가 다시 보낸 기어(P)가 시연 콘솔로 고른 주행(D)을 끝내지 않음 |
 | `ClockMonotonicTest` (1) | 회귀: 작성 시각이 현재보다 늦은 편지는 매칭되지 않음 → 시연 시계는 단조 증가 |
 
