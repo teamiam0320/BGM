@@ -83,6 +83,10 @@ data class OsmMap(
 @Serializable
 data class MapData(val river: List<List<Double>> = emptyList(), val landmarks: List<Landmark> = emptyList())
 
+/** 자유 테스트용 발화 예시(감정별). 콘솔에서 눌러 음성 인식 결과처럼 넣는다. */
+@Serializable
+data class FreeLine(val label: String, val text: String)
+
 @Serializable
 data class AutoDriveData(val simSeconds: Int = 150, val drivers: Map<String, DriverTimeline> = emptyMap())
 
@@ -96,6 +100,7 @@ data class DemoScenario(
     /** 자동 주행용 실제 도로 경로 [lat, lng, ...] (OSRM, tools/track_build.py). */
     val track: List<Double> = emptyList(),
     val autoDrive: AutoDriveData? = null,
+    val freeLines: List<FreeLine> = emptyList(),
 ) {
     val trackPoints: List<GeoPoint> get() = track.chunked(2).filter { it.size == 2 }.map { GeoPoint(it[0], it[1]) }
 

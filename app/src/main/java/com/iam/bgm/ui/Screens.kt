@@ -32,6 +32,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -118,7 +120,7 @@ fun BgmApp(vm: BgmViewModel) {
                 TopBar(s, vm, c, consoleOpen) { consoleOpen = !consoleOpen }
                 Crossfade(targetState = if (driving) null else tab, animationSpec = tween(350), label = "screen") { t ->
                     when (t) {
-                        null -> DrivingScreen(s, vm, map3d) { map3d = !map3d }
+                        null -> DrivingScreen(s, vm, c, map3d) { map3d = !map3d }
                         Tab.MAP -> Box(Modifier.fillMaxSize().padding(start = 40.dp, end = 40.dp, top = 12.dp, bottom = 36.dp)) { HomeMap(s, vm) }
                         Tab.DIARY -> DiaryBook(s, vm, diarySel) { diarySel = it }
                         Tab.SONGS -> MySongs(s, vm)
@@ -394,7 +396,7 @@ private fun Pill(text: String, dot: Color) {
 // ---------------- 주행 화면: 음성 전용, 최소 표시 ----------------
 
 @Composable
-private fun DrivingScreen(s: UiState, vm: BgmViewModel, map3d: Boolean, onToggle3d: () -> Unit) {
+private fun DrivingScreen(s: UiState, vm: BgmViewModel, c: ConsoleState, map3d: Boolean, onToggle3d: () -> Unit) {
     Column(
         Modifier.fillMaxSize().padding(start = 48.dp, end = 48.dp, top = 8.dp, bottom = 40.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -405,6 +407,7 @@ private fun DrivingScreen(s: UiState, vm: BgmViewModel, map3d: Boolean, onToggle
                 route = vm.data.scenario.route, map = vm.data.scenario.map, osm = vm.data.osm, track = vm.data.scenario.trackPoints, position = s.position, pins = pinsOf(s),
                 currentZone = s.zoneId, offerZone = s.pendingOffer?.letter?.zoneId,
                 detail = false, selected = null, onSelect = {}, modifier = Modifier.fillMaxSize(), tilt3d = map3d, pickupRadiusM = s.pickupRadiusM,
+                onTapGeo = if (c.freeDrive) { g -> vm.freeDriveTo(g) } else null, destination = c.freeTarget,
             )
             ListenBadge(s.listening, Modifier.align(Alignment.TopStart).padding(20.dp))
             ViewToggle(map3d, onToggle3d, Modifier.align(Alignment.TopEnd).padding(top = 36.dp, end = 20.dp))
@@ -910,6 +913,7 @@ private fun DemoConsole(vm: BgmViewModel, s: UiState, c: ConsoleState) {
         c.driver.lines.forEachIndexed { i, line ->
             Chip("“$line”", selected = false, enabled = s.mode == DriveMode.DRIVING, highlight = i == c.nextLine) { vm.sayLine(i) }
         }
+        FreeTestSection(vm, s, c)
         Label("SDK 연결 상태")
         s.portLabels.forEach { Text("· $it", color = Soft, fontSize = 14.sp) }
         if (s.ambientApplied == false) Text("· 앰비언트 라이트: 이 환경에서는 미지원(주차 시 색 변경 생략)", color = Soft, fontSize = 14.sp)
@@ -917,6 +921,46 @@ private fun DemoConsole(vm: BgmViewModel, s: UiState, c: ConsoleState) {
         Spacer(Modifier.height(8.dp))
         OutlinedButton(onClick = { vm.resetDemo() }, enabled = true) { Text("시연 데이터 초기화", color = Soft) }
     }
+}
+
+/** 자유 테스트: 아무 문장이나 말하기, 감정별 예시, 지도를 눌러 자유 주행, 차속(수신 반경). */
+@Composable
+private fun FreeTestSection(vm: BgmViewModel, s: UiState, c: ConsoleState) {
+    val driving = s.mode == DriveMode.DRIVING
+    var text by remember { mutableStateOf("") }
+    Label("5. 자유 테스트")
+    Text("D 주행 상태에서 아무 문장이나 말해 보거나, 지도를 눌러 원하는 곳으로 달려 보세요.", color = Soft, fontSize = 14.sp)
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedTextField(
+            value = text, onValueChange = { text = it }, singleLine = true, modifier = Modifier.weight(1f),
+            placeholder = { Text("아미에게 할 말", color = Dim) },
+            textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontSize = 16.sp),
+        )
+        Button(
+            onClick = { vm.sayText(text); text = "" }, enabled = driving && text.isNotBlank(), shape = RoundedCornerShape(14.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Accent, disabledContainerColor = GlassStrong),
+        ) { Text("말하기", color = if (driving && text.isNotBlank()) Ink else Dim) }
+    }
+    vm.data.scenario.freeLines.chunked(3).forEach { row ->
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            row.forEach { l ->
+                Button(
+                    onClick = { vm.sayText(l.text) }, enabled = driving, modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(containerColor = GlassStrong, disabledContainerColor = Color(0xFF141A28)),
+                    shape = RoundedCornerShape(12.dp),
+                ) { Text(l.label, color = Color.White, fontSize = 14.sp, maxLines = 1) }
+            }
+            repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
+        }
+    }
+    Chip(if (c.freeDrive) "지도를 눌러 자유 주행: 켜짐" else "지도를 눌러 자유 주행: 꺼짐", selected = c.freeDrive) { vm.setFreeDrive(!c.freeDrive) }
+    val radius = TestPickup.radius(vm, c.freeSpeedKmh)
+    Text("차속 ${c.freeSpeedKmh.toInt()}km/h · 수신 반경 ${radius}m", color = Accent, fontSize = 15.sp)
+    Slider(value = c.freeSpeedKmh.toFloat(), onValueChange = { vm.setFreeSpeed(it.toDouble()) }, valueRange = 0f..120f, steps = 11)
+}
+
+private object TestPickup {
+    fun radius(vm: BgmViewModel, kmh: Double) = vm.data.policy.pickup.radiusMeters(kmh).toInt()
 }
 
 @Composable

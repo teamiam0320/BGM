@@ -34,6 +34,10 @@ data class ConsoleState(
     val clockLabel: String,
     /** 자동 주행 진행률(0~1). null이면 자동 주행 중이 아님. */
     val autoProgress: Double? = null,
+    /** 자유 주행(테스트): 켜면 주행 지도를 눌러 그쪽으로 달린다. */
+    val freeDrive: Boolean = false,
+    val freeSpeedKmh: Double = 60.0,
+    val freeTarget: com.iam.bgm.core.GeoPoint? = null,
 )
 
 class BgmViewModel(app: Application) : AndroidViewModel(app) {
@@ -139,11 +143,68 @@ class BgmViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // ---------------- 자유 테스트 ----------------
+
+    /** 입력한 문장을 음성 인식 결과처럼 넣는다(실차에서는 SpeechToText SDK가 같은 메서드를 부른다). */
+    fun sayText(text: String) {
+        val t = text.trim()
+        if (t.isEmpty()) return
+        voice.stop()
+        controller.onUserSpeech(t)
+        refresh()
+    }
+
+    fun setFreeDrive(on: Boolean) {
+        _console.value = _console.value.copy(freeDrive = on, freeTarget = if (on) _console.value.freeTarget else null)
+        if (!on) { freeJob?.cancel(); controller.onSpeed(0.0) }
+    }
+
+    fun setFreeSpeed(kmh: Double) {
+        _console.value = _console.value.copy(freeSpeedKmh = kmh)
+        if (freeJob?.isActive == true) controller.onSpeed(kmh)
+    }
+
+    private var freeJob: Job? = null
+
+    /**
+     * 자유 주행: 지금 위치에서 누른 곳까지 직선으로 달린다(도로는 따르지 않음).
+     * 실제 시간보다 [FREE_SIM_X]배 빠르게 움직이고, 시나리오 시계도 같은 비율로 흐른다.
+     */
+    fun freeDriveTo(target: com.iam.bgm.core.GeoPoint) {
+        if (!_console.value.freeDrive || autoJob?.isActive == true) return
+        _console.value = _console.value.copy(freeTarget = target)
+        freeJob?.cancel()
+        freeJob = viewModelScope.launch {
+            val tickMs = 100L
+            var pos = controller.state.value.position ?: data.scenario.route.first().point
+            var simSeconds = 0.0
+            controller.onSpeed(_console.value.freeSpeedKmh)
+            while (true) {
+                val kmh = _console.value.freeSpeedKmh
+                val step = kmh / 3.6 * (tickMs / 1000.0) * FREE_SIM_X
+                val dist = com.iam.bgm.core.Zone.metersBetween(pos, target)
+                pos = if (dist <= step || step <= 0.0 && dist < 1.0) target
+                else if (step <= 0.0) pos
+                else com.iam.bgm.core.GeoPoint(pos.lat + (target.lat - pos.lat) * step / dist, pos.lng + (target.lng - pos.lng) * step / dist)
+                location.inject(pos)
+                simSeconds += tickMs / 1000.0 * FREE_SIM_X
+                if (simSeconds >= 60) { clock.advanceMinutes((simSeconds / 60).toLong()); simSeconds %= 60 }
+                refresh()
+                if (pos == target) break
+                delay(tickMs)
+            }
+            controller.onSpeed(0.0)
+            _console.value = _console.value.copy(freeTarget = null)
+        }
+    }
+
     fun stopAutoDrive() {
         autoJob?.cancel(); autoJob = null
         controller.onSpeed(0.0)
         _console.value = _console.value.copy(autoProgress = null)
     }
+
+    private companion object { const val FREE_SIM_X = 8.0 }
 
     private fun refresh() { _console.value = _console.value.copy(clockLabel = clock.label()) }
 

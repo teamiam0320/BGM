@@ -103,6 +103,13 @@ private class Perspective(w: Float, h: Float) {
     private val cullY = farY * 0.92f
     fun visible(g: Offset) = g.y > cullY
     fun map(g: Offset): Offset { buf[0] = g.x; buf[1] = g.y; m.mapPoints(buf, 0, buf, 0, 1); return Offset(buf[0], buf[1]) }
+    private val inv = android.graphics.Matrix().also { m.invert(it) }
+    /** 화면 → 바닥. 지평선 위를 누르면 null */
+    fun unmap(sp: Offset): Offset? {
+        if (sp.y <= horizon + 4f) return null
+        buf[0] = sp.x; buf[1] = sp.y; inv.mapPoints(buf, 0, buf, 0, 1)
+        return Offset(buf[0], buf[1]).takeIf { visible(it) }
+    }
     /** 그 지점의 화면 확대율(멀수록 작다) */
     fun scaleAt(g: Offset): Float {
         buf[0] = g.x; buf[1] = g.y; buf[2] = g.x + 10f; buf[3] = g.y
@@ -112,7 +119,7 @@ private class Perspective(w: Float, h: Float) {
 }
 
 /** 위경도 → 화면 좌표. 경도는 cos(위도)로 보정해 서울 위도에서 모양이 찌그러지지 않게 한다. */
-private class Projector(points: List<GeoPoint>, w: Float, h: Float, pad: Float) {
+internal class Projector(points: List<GeoPoint>, w: Float, h: Float, pad: Float) {
     private val k = cos(Math.toRadians(points.map { it.lat }.average()))
     private val minX = points.minOf { it.lng * k }
     private val maxX = points.maxOf { it.lng * k }
@@ -124,6 +131,8 @@ private class Projector(points: List<GeoPoint>, w: Float, h: Float, pad: Float) 
     fun px(lat: Double, lng: Double) = Offset((ox + (lng * k - minX) * scale).toFloat(), (oy + (maxY - lat) * scale).toFloat())
     fun px(p: GeoPoint) = px(p.lat, p.lng)
     fun meters(m: Double) = (m / 111_000.0 * scale).toFloat()
+    /** 화면(지도 px) → 위경도 */
+    fun geo(o: Offset) = GeoPoint(maxY - (o.y - oy) / scale, ((o.x - ox) / scale + minX) / k)
 
     /** [lat, lng, lat, lng, ...] → Path */
     fun path(flat: List<Double>, close: Boolean = false) = Path().apply {
@@ -138,7 +147,7 @@ private class Projector(points: List<GeoPoint>, w: Float, h: Float, pad: Float) 
 }
 
 /** 추적 카메라: 지도 좌표(px) → 화면. 차를 anchor에 두고, 진행 방향(heading)이 위를 향하게 회전, zoom배 확대. */
-private class Camera(val car: Offset, val headingDeg: Float, val zoom: Float, val anchor: Offset) {
+internal class Camera(val car: Offset, val headingDeg: Float, val zoom: Float, val anchor: Offset) {
     private val r = Math.toRadians(-headingDeg.toDouble())
     private val c = cos(r).toFloat()
     private val s = sin(r).toFloat()
@@ -146,6 +155,11 @@ private class Camera(val car: Offset, val headingDeg: Float, val zoom: Float, va
         val dx = (p.x - car.x) * zoom
         val dy = (p.y - car.y) * zoom
         return Offset(dx * c - dy * s + anchor.x, dx * s + dy * c + anchor.y)
+    }
+    /** 화면 → 지도 px (screen의 역) */
+    fun unscreen(q: Offset): Offset {
+        val dx = q.x - anchor.x; val dy = q.y - anchor.y
+        return Offset((dx * c + dy * s) / zoom + car.x, (-dx * s + dy * c) / zoom + car.y)
     }
 }
 
@@ -177,6 +191,10 @@ fun MusicMap(
     tilt3d: Boolean = true,
     /** 노래 수신 반경(미터). 주행 중 내 차 둘레에 표시한다. */
     pickupRadiusM: Double? = null,
+    /** 자유 주행 테스트: 주행 지도를 누르면 그 위치(위경도)를 알려준다. null이면 주행 지도는 터치를 받지 않는다. */
+    onTapGeo: ((GeoPoint) -> Unit)? = null,
+    /** 자유 주행 목적지 표시 */
+    destination: GeoPoint? = null,
 ) {
     val t = rememberInfiniteTransition(label = "map")
     val pulse by t.animateFloat(0f, 1f, infiniteRepeatable(tween(1800, easing = LinearEasing)), label = "pulse")
@@ -192,7 +210,22 @@ fun MusicMap(
     val lat by animateFloatAsState((carGeo?.lat ?: 0.0).toFloat(), tween(120, easing = LinearEasing), label = "lat")
     val lng by animateFloatAsState((carGeo?.lng ?: 0.0).toFloat(), tween(120, easing = LinearEasing), label = "lng")
     val lastHeading = remember { FloatArray(1) } // 화면에 쓰지 않는 보관값(상태 아님)
-    val targetHeading = if (follow) headingAlong(track, carGeo!!)?.let { raw ->
+    // 진행 방향: 실제로 움직인 방향(이전 위치 → 지금 위치, 8m 이상 움직였을 때). 아직 움직이지 않았으면 경로 방향.
+    val lastPos = remember { arrayOfNulls<GeoPoint>(1) }
+    val moved = carGeo?.let { cur ->
+        val prev = lastPos[0]
+        when {
+            prev == null -> { lastPos[0] = cur; null }
+            Zone.metersBetween(prev, cur) >= 8.0 -> {
+                val k = cos(Math.toRadians(cur.lat))
+                lastPos[0] = cur
+                Math.toDegrees(atan2((cur.lng - prev.lng) * k, cur.lat - prev.lat)).toFloat()
+            }
+            else -> null
+        }
+    }
+    val rawHeading = if (follow) moved ?: (if (lastHeading[0] == 0f) headingAlong(track, carGeo!!) else null) else null
+    val targetHeading = if (follow) rawHeading?.let { raw ->
         val prev = lastHeading[0]
         val delta = ((raw - prev) % 360f + 540f) % 360f - 180f
         (prev + delta).also { lastHeading[0] = it }
@@ -221,6 +254,23 @@ fun MusicMap(
                 val (z, pn) = zoomAround(zoom.floatValue, pan.value, zoomChange, centroid, w, h)
                 zoom.floatValue = z
                 pan.value = clampPan(pn + panChange, z, w, h)
+            }
+        }
+    }
+
+    val tapGeo = rememberUpdatedState(onTapGeo)
+    if (!detail && onTapGeo != null) {
+        boxModifier = boxModifier.pointerInput(extent) {
+            detectTapGestures { pos ->
+                val w = size.width.toFloat(); val h = size.height.toFloat()
+                val pr = Projector(extent, w, h, 70 * density)
+                val ci = cam.value
+                val camera = cameraOf(ci, pr, w, h)
+                val ground = if (camera != null && ci.tilt) Perspective(w, h).unmap(pos) else pos
+                if (ground != null) {
+                    val mapPx = camera?.unscreen(ground) ?: ground
+                    tapGeo.value?.invoke(pr.geo(mapPx))
+                }
             }
         }
     }
@@ -337,6 +387,7 @@ fun MusicMap(
                         val g = ground(r.point)
                         if (persp.visible(g)) { val o = persp.map(g); drawCircle(PinBlue.copy(alpha = 0.7f), radius = 7 * u * persp.scaleAt(g).coerceIn(0.25f, 1.4f), center = o, style = Stroke(2 * u)) }
                     }
+                    destination?.let { dg -> val g = ground(dg); if (persp.visible(g)) destFlag(persp.map(g), u * persp.scaleAt(g).coerceIn(0.4f, 1.5f)) }
                     // 내 차: 바닥에 붙은 화살표(원근 적용)
                     drawIntoCanvas { it.nativeCanvas.save(); it.nativeCanvas.concat(persp.m) }
                     pickupRadiusM?.let { pickupRing(camera!!.anchor, pr.meters(it) * camera.zoom, u) }
@@ -384,6 +435,7 @@ fun MusicMap(
                 }
                 // 내 차: 추적 시점에서는 화면 아래 중앙에 진행 방향 화살표, 2D에서는 점(실제 위치, 저장·공유하지 않음)
                 if (camera != null) {
+                    destination?.let { destFlag(at(it), u) }
                     pickupRadiusM?.let { pickupRing(camera.anchor, pr.meters(it) * camera.zoom, u) }
                     drawCircle(Color.White.copy(alpha = 0.25f * (1 - pulse)), radius = (16 + 26 * pulse) * u, center = camera.anchor)
                     carArrow(camera.anchor, u)
@@ -508,6 +560,13 @@ private fun DrawScope.sphere(g: Offset, r: Float, color: Color, glow: Float) {
         Brush.radialGradient(listOf(Color.White, color, dark), center = Offset(c.x - r * 0.38f, c.y - r * 0.42f), radius = r * 1.55f),
         radius = r, center = c,
     )
+}
+
+/** 자유 주행 목적지 깃발. */
+private fun DrawScope.destFlag(o: Offset, u: Float) {
+    drawCircle(Color.White.copy(alpha = 0.18f), radius = 18 * u, center = o)
+    drawCircle(Color.White, radius = 18 * u, center = o, style = Stroke(2.5f * u))
+    drawCircle(Color.White, radius = 5 * u, center = o)
 }
 
 /** 노래 수신 반경: 이 원 안에 노래가 들어오면 아미가 들려준다. */

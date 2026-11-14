@@ -1,6 +1,9 @@
 package com.iam.bgm
 
 import androidx.compose.ui.geometry.Offset
+import com.iam.bgm.core.GeoPoint
+import com.iam.bgm.ui.Camera
+import com.iam.bgm.ui.Projector
 import com.iam.bgm.ui.clampPan
 import com.iam.bgm.ui.viewOf
 import com.iam.bgm.ui.zoomAround
@@ -23,6 +26,19 @@ class MapZoomTest {
         assertEquals(centroid.x, after.x, 0.01f)
         assertEquals(centroid.y, after.y, 0.01f)
         assertEquals(2.7f, z1, 1e-4f)
+    }
+
+    /** 자유 주행: 지도를 누른 화면 좌표 → 위경도 역변환이 정확해야 차가 누른 곳으로 간다(추적 카메라 회전·확대 포함). */
+    @Test fun tapInversionRoundTrips() {
+        val pts = listOf(GeoPoint(37.57, 126.97), GeoPoint(37.53, 127.05), GeoPoint(37.55, 127.0))
+        val pr = Projector(pts, w, h, 70f)
+        val g = GeoPoint(37.541, 127.012)
+        val back = pr.geo(pr.px(g))
+        assertEquals(g.lat, back.lat, 1e-6); assertEquals(g.lng, back.lng, 1e-6)
+        val cam = Camera(pr.px(GeoPoint(37.54, 127.0)), 37f, 3.4f, Offset(w / 2, h * 0.8f))
+        val p = pr.px(g)
+        val round = cam.unscreen(cam.screen(p))
+        assertEquals(p.x, round.x, 0.01f); assertEquals(p.y, round.y, 0.01f)
     }
 
     /** 배율은 1~6배, 이동은 확대한 만큼만. */
